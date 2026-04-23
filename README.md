@@ -35,9 +35,11 @@ Outros módulos de drill (quadrados, multidígito, atalhos), `aitken diagnostic`
 
 Linhas marcadas com ✗ são planejadas — o nome exato do comando pode mudar quando forem implementadas.
 
+> **Política padrão de todo drill: retry-on-wrong.** Toda sessão de treino reapresenta o mesmo problema sempre que a resposta estiver errada, até ele ser respondido corretamente. `--count N` conta *problemas distintos a dominar*; tentativas erradas não consomem desse orçamento. A resposta certa nunca é exibida em caso de erro — revelá-la esvaziaria o retry.
+
 | Funcionalidade | Descrição | Como chamar | Implementado |
 | --- | --- | --- | --- |
-| Treino de tabuada | Sessão cronometrada de multiplicações na faixa configurada (padrão 2-9, estensível até qualquer inteiro). Imprime feedback por problema e resumo de acertos + latência ao final. Aceita `--count`, `--min`, `--max`, `--seed`, `--include-trivial`, `--no-persist`. | `aitken drill tables` | ✓ |
+| Treino de tabuada | Sessão cronometrada de multiplicações na faixa configurada (padrão 2-9, estensível até qualquer inteiro). Respostas erradas são reapresentadas até o usuário acertar (retry-on-wrong). Imprime feedback por tentativa e resumo de acertos + latência ao final. Aceita `--count`, `--min`, `--max`, `--seed`, `--include-trivial`, `--no-persist`. | `aitken drill tables` | ✓ |
 | Histórico persistente | Cada tentativa é gravada em SQLite local (`~/.local/share/aitken/aitken.db` por padrão, respeitando `$XDG_DATA_HOME`). Base para as estatísticas e progressão futuras. | automático em qualquer `drill` (desabilitável com `--no-persist`) | ✓ |
 | Treino de quadrados | Sessão cronometrada de quadrados até 25². | `aitken drill squares` | ✗ |
 | Treino multidígito | Multiplicações 2d×1d, 2d×2d, 3d×1d, 3d×2d, 3d×3d. | `aitken drill multidigit` | ✗ |
@@ -115,18 +117,18 @@ aitken drill tables --count 30 --seed 42
 **Loop de iteração (`ui/` ↔ `session/` ↔ `core/`)**
 
 8. `cmd_drill_tables` delega para `plain.run(session)`.
-9. `plain.run` abre `for i, problem in enumerate(session, start=1):`. Isso dispara `DrillSession.__iter__`, que decrementa `self._remaining` e faz `yield self._generator.next(self._rng)` até zerar.
+9. `plain.run` itera `for problem in session:`, lendo a posição atual via `session.current_position`. Isso dispara `DrillSession.__iter__`, que — se `self._pending_retry` estiver setado — reemite o mesmo problema sem decrementar `self._remaining`; caso contrário decrementa, incrementa `_position` e faz `yield self._generator.next(self._rng)`. O loop segue enquanto restar problema distinto a gerar **ou** um retry pendente.
 10. `TablesGenerator.next(rng)` chama `_draw(rng)` em um laço de amostragem por rejeição (descarta pares com fator `< 2` quando `exclude_trivial=True`), calcula a `key` canônica (`min(a,b), max(a,b)` quando `commutative_pairs=True`) e devolve um `Problem` com `prompt = "a × b"` e `expected_answer = str(a*b)`.
 
 **Loop de captura (`ui/` ↔ `session/`)**
 
 11. De volta ao `plain.run`: `start = time.perf_counter()` (monotônico, imune a ajustes de relógio), `answer = ask(prompt)` (onde `ask` é o `input_fn` injetado ou `builtins.input`), `elapsed_ms = int((time.perf_counter() - start) * 1000)`. Um `EOFError`/`KeyboardInterrupt` quebra o loop graciosamente — o resumo ainda é gerado com os `attempts` que chegaram até ali.
-12. `session.record(problem, answer, elapsed_ms)` valida `elapsed_ms >= 0`, chama `generator.check(problem, user_answer)` (`TablesGenerator.check` faz `strip()`, tenta `int()`, compara — nunca levanta), constrói o `Attempt` e apenda. Se `self._repo is not None`, chama `repo.record(attempt)` — o `INSERT` inclui `created_at = datetime.now(UTC).isoformat(timespec="milliseconds")`. Esse `if` é deliberado: dispensa uma classe `NullRepo` e mantém o teste de `--no-persist` óbvio.
-13. `plain.run` formata o retorno via `_format_feedback(attempt)` (uma linha com `ok (Xs)` ou `x correta: Y`) e escreve no `output`.
+12. `session.record(problem, answer, elapsed_ms)` valida `elapsed_ms >= 0`, chama `generator.check(problem, user_answer)` (`TablesGenerator.check` faz `strip()`, tenta `int()`, compara — nunca levanta), constrói o `Attempt` e apenda. Se `self._repo is not None`, chama `repo.record(attempt)` — o `INSERT` inclui `created_at = datetime.now(UTC).isoformat(timespec="milliseconds")`. Ao final, `self._pending_retry = None if correct else problem` — é essa atribuição que implementa o retry-on-wrong: na próxima iteração, `__iter__` vê o campo preenchido e reemite o mesmo `Problem`.
+13. `plain.run` formata o retorno via `_format_feedback(attempt)` (`ok (Xs)` no acerto, `x errado (sua: 'Z', Xs)` no erro — a resposta certa **não** é revelada, porque o problema volta logo em seguida) e escreve no `output`.
 
 **Encerramento**
 
-14. Esgotados os 30 problemas (ou após abortar), `plain.run` chama `session.summary()`, que simplesmente delega a `stats.summarize(self._attempts)`. A função é pura: recebe a lista, computa `total`, `correct`, `accuracy`, `median_ms`, `p90_ms` (via `statistics.quantiles(..., n=10)[8]`, só se houver ≥ 10 amostras) e o par mais lento. `plain.run` escreve o bloco via `_format_summary` e retorna o `SessionSummary`.
+14. Esgotados os 30 problemas distintos **com retry exaurido em cada um** (ou após abortar), `plain.run` chama `session.summary()`, que simplesmente delega a `stats.summarize(self._attempts)`. A função é pura: recebe a lista (que pode conter múltiplas entradas por problema devido aos retries), computa `total`, `correct`, `accuracy`, `median_ms`, `p90_ms` (via `statistics.quantiles(..., n=10)[8]`, só se houver ≥ 10 amostras) e o par mais lento. `plain.run` escreve o bloco via `_format_summary` e retorna o `SessionSummary`.
 15. De volta a `cmd_drill_tables`, o bloco `finally` fecha a conexão — mesmo se qualquer passo anterior tiver levantado. `main` retorna `int(args.func(args))` e o processo encerra com `rc=0`.
 
 ### Grafo de chamadas

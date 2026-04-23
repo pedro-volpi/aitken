@@ -16,6 +16,12 @@ operações:
 2. ``record(problem, user_answer, elapsed_ms)`` que avalia, persiste e
    devolve a tentativa resultante.
 
+**Retry-on-wrong**: sempre que ``record`` conclui que a resposta é
+incorreta, o mesmo problema é reenfileirado e voltará a ser emitido pelo
+iterador na próxima rodada. ``max_problems`` conta *problemas distintos a
+dominar*; a mesma questão pode gerar múltiplos ``Attempt`` na lista. Essa é
+a política padrão de todas as sessões de drill do projeto.
+
 A UI (seja terminal, Textual ou GUI futura) é quem mede latência, lê
 entrada do usuário e renderiza feedback. Trocar a UI é trocar o driver
 do loop — a sessão fica idêntica.
@@ -31,7 +37,7 @@ from aitken.storage.repositories import AttemptRepo
 
 
 class DrillSession:
-    """Uma sessão de treino limitada por contagem de problemas.
+    """Uma sessão de treino limitada por contagem de problemas distintos.
 
     Exemplo de uso (driver genérico, UI-agnóstico):
 
@@ -44,11 +50,9 @@ class DrillSession:
         summary = session.summary()
         ui.show_summary(summary)
 
-    A sessão *não* avança automaticamente: o iterador produz o próximo
-    problema, mas o contrato implícito é que o driver chama ``record``
-    antes de iterar de novo. A contagem total é fixa — abandonar cedo
-    (``break`` no loop) simplesmente descarta as iterações restantes;
-    os problemas já registrados permanecem em :attr:`attempts`.
+    Cada resposta errada faz o mesmo ``problem`` voltar na próxima iteração.
+    Abandonar cedo (``break`` no loop) descarta o restante; o que já foi
+    registrado permanece em :attr:`attempts`.
     """
 
     def __init__(
@@ -63,7 +67,8 @@ class DrillSession:
         Args:
             generator: gerador de problemas e validador de respostas.
             repo: repositório de persistência, ou ``None`` para não gravar.
-            max_problems: número de problemas a produzir; deve ser > 0.
+            max_problems: número de problemas *distintos* a produzir; deve
+                ser > 0. Erros disparam retry sem consumir desse contador.
             rng: fonte de aleatoriedade. Injetada para reprodutibilidade.
 
         Raises:
@@ -77,11 +82,18 @@ class DrillSession:
         self._rng = rng
         self._attempts: list[Attempt] = []
         self._remaining = max_problems
+        self._pending_retry: Problem | None = None
+        self._position = 0
 
     @property
     def total_problems(self) -> int:
-        """Número total de problemas que esta sessão produzirá."""
+        """Número total de problemas distintos que esta sessão produzirá."""
         return self._max_problems
+
+    @property
+    def current_position(self) -> int:
+        """Posição 1-indexada do problema distinto atual (não avança em retry)."""
+        return self._position
 
     @property
     def attempts(self) -> list[Attempt]:
@@ -89,16 +101,23 @@ class DrillSession:
         return list(self._attempts)
 
     def __iter__(self) -> Iterator[Problem]:
-        """Itera produzindo problemas até atingir o limite.
+        """Itera produzindo problemas até dominar ``max_problems`` distintos.
 
-        Cada ``next()`` consome uma das iterações restantes. O iterador
-        ignora se o driver chamou ``record`` ou não — ele só conta quantos
-        problemas já foram *emitidos*. Isso é deliberado: permite UIs que
-        pulem problemas (contando como não respondidos) ou abortem cedo.
+        Se a última chamada a ``record`` apontou resposta errada, a próxima
+        iteração reemite *o mesmo* problema — sem decrementar o contador de
+        pendentes nem avançar :attr:`current_position`. O loop só termina
+        quando todos os distintos foram respondidos corretamente ou o driver
+        aborta com ``break``.
         """
-        while self._remaining > 0:
-            self._remaining -= 1
-            yield self._generator.next(self._rng)
+        while self._remaining > 0 or self._pending_retry is not None:
+            if self._pending_retry is not None:
+                problem = self._pending_retry
+                self._pending_retry = None
+            else:
+                self._remaining -= 1
+                self._position += 1
+                problem = self._generator.next(self._rng)
+            yield problem
 
     def record(
         self,
@@ -107,6 +126,9 @@ class DrillSession:
         elapsed_ms: int,
     ) -> Attempt:
         """Avalia a resposta, persiste e devolve a tentativa.
+
+        Em caso de resposta incorreta, ``problem`` é reenfileirado para a
+        próxima iteração do loop — política *retry-on-wrong* padrão.
 
         Args:
             problem: o problema apresentado (vindo da iteração).
@@ -133,8 +155,9 @@ class DrillSession:
         self._attempts.append(attempt)
         if self._repo is not None:
             self._repo.record(attempt)
+        self._pending_retry = None if correct else problem
         return attempt
 
     def summary(self) -> SessionSummary:
-        """Resumo estatístico das tentativas feitas na sessão."""
+        """Resumo estatístico de todas as tentativas (inclusive retries)."""
         return summarize(self._attempts)

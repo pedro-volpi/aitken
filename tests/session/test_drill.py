@@ -109,20 +109,66 @@ def test_invalid_max_problems() -> None:
 
 
 def test_summary_reflects_attempts() -> None:
+    # Todas as respostas corretas na primeira tentativa: total == distintos.
     session = _session(count=4)
     elapsed_values = [400, 600, 800, 1000]
     for i, problem in enumerate(session):
-        ans = problem.expected_answer if i != 2 else "wrong"
-        session.record(problem, ans, elapsed_ms=elapsed_values[i])
+        session.record(problem, problem.expected_answer, elapsed_ms=elapsed_values[i])
 
     s = session.summary()
     assert s.total == 4
-    assert s.correct == 3
-    assert s.wrong == 1
+    assert s.correct == 4
+    assert s.wrong == 0
     # Latências [400, 600, 800, 1000] → mediana = 700.
     assert s.median_ms == 700.0
     assert s.slowest is not None
     assert s.slowest[1] == 1000
+
+
+def test_wrong_answer_retries_same_problem() -> None:
+    """Uma resposta errada faz o iterador reemitir o mesmo problema."""
+    session = _session(count=3)
+    iterator = iter(session)
+    first = next(iterator)
+    session.record(first, "wrong-answer", elapsed_ms=500)
+    retry = next(iterator)
+    assert retry == first, "sessão deveria reemitir o mesmo problema após erro"
+
+
+def test_retry_does_not_advance_position() -> None:
+    """`current_position` conta problemas distintos, não tentativas."""
+    session = _session(count=3)
+    iterator = iter(session)
+    first = next(iterator)
+    assert session.current_position == 1
+    session.record(first, "wrong-answer", elapsed_ms=500)
+    retry = next(iterator)
+    assert session.current_position == 1, "posição não deve mudar no retry"
+    session.record(retry, retry.expected_answer, elapsed_ms=500)
+    second = next(iterator)
+    assert second != first
+    assert session.current_position == 2
+
+
+def test_session_only_finishes_when_all_correct() -> None:
+    """Sessão continua até cada um dos N distintos ser acertado ao menos uma vez."""
+    session = _session(count=2)
+    attempts_count = 0
+    wrong_done = False
+    for problem in session:
+        # Erra o primeiro distinto uma vez, depois acerta tudo.
+        if not wrong_done and session.current_position == 1:
+            session.record(problem, "wrong", elapsed_ms=500)
+            wrong_done = True
+        else:
+            session.record(problem, problem.expected_answer, elapsed_ms=500)
+        attempts_count += 1
+
+    assert attempts_count == 3  # 1 erro + 1 retry correto + 1 correto
+    s = session.summary()
+    assert s.total == 3
+    assert s.correct == 2
+    assert s.wrong == 1
 
 
 def test_breaking_early_preserves_recorded_attempts() -> None:

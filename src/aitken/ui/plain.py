@@ -60,10 +60,12 @@ def run(
 
     total = session.total_problems
     _print(f"\nSessão: {total} problemas. Digite o resultado e Enter.")
+    _print("Respostas erradas são reapresentadas até serem acertadas.")
     _print("Ctrl-C ou Ctrl-D para abandonar.\n")
 
-    for i, problem in enumerate(session, start=1):
-        prompt = f"[{i}/{total}]  {problem.prompt} = "
+    for problem in session:
+        pos = session.current_position
+        prompt = f"[{pos}/{total}]  {problem.prompt} = "
         start = time.perf_counter()
         try:
             answer = ask(prompt)
@@ -83,14 +85,16 @@ def run(
 
 
 def _format_feedback(attempt: Attempt) -> str:
-    """Formata uma linha de feedback após uma resposta."""
+    """Formata uma linha de feedback após uma resposta.
+
+    Em caso de erro, a resposta correta NÃO é revelada — a UI apenas
+    confirma o erro e ecoa a entrada do usuário. O próximo ciclo do loop
+    reapresenta o mesmo problema (política retry-on-wrong da sessão).
+    """
     secs = attempt.elapsed_ms / 1000
     if attempt.correct:
         return f"  ok  ({secs:.2f}s)"
-    return (
-        f"  x   correta: {attempt.problem.expected_answer}  "
-        f"(sua: {attempt.user_answer!r}, {secs:.2f}s)"
-    )
+    return f"  x   errado (sua: {attempt.user_answer!r}, {secs:.2f}s)"
 
 
 def _format_summary(summary: SessionSummary) -> list[str]:

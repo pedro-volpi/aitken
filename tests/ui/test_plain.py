@@ -85,10 +85,11 @@ def test_run_mixed_results() -> None:
         rng=Random(1),
     )
     correct_answers = [p.expected_answer for p in preview]
-    # Erra o segundo de propósito.
+    # Erra o segundo de propósito; depois acerta (retry), depois segue em frente.
     answers: list[str | Exception] = [
         correct_answers[0],
         "999",
+        correct_answers[1],
         correct_answers[2],
     ]
 
@@ -101,12 +102,43 @@ def test_run_mixed_results() -> None:
     buf = io.StringIO()
     summary = run(session, output=buf, input_fn=_FakeInput(answers))
 
-    assert summary.total == 3
-    assert summary.correct == 2
+    # 4 tentativas registradas (1 errada + 3 corretas), 3 distintos dominados.
+    assert summary.total == 4
+    assert summary.correct == 3
     assert summary.wrong == 1
     text = buf.getvalue()
-    assert "correta:" in text  # feedback de erro
+    assert "errado" in text  # feedback de erro (sem revelar a resposta)
+    assert "correta:" not in text  # a resposta certa nunca é exibida no erro
     assert "ok" in text  # feedback de acerto
+
+
+def test_run_repeats_problem_until_correct() -> None:
+    """A mesma prompt aparece em ciclos sucessivos até a resposta ser aceita."""
+    preview = DrillSession(
+        generator=TablesGenerator(TablesParams()),
+        repo=None,
+        max_problems=1,
+        rng=Random(3),
+    )
+    (only,) = list(preview)
+
+    session = DrillSession(
+        generator=TablesGenerator(TablesParams()),
+        repo=None,
+        max_problems=1,
+        rng=Random(3),
+    )
+    fake = _FakeInput(["1", "2", only.expected_answer])
+    buf = io.StringIO()
+    summary = run(session, output=buf, input_fn=fake)
+
+    # Três tentativas registradas para o mesmo problema.
+    assert summary.total == 3
+    assert summary.correct == 1
+    assert summary.wrong == 2
+    # A UI recebeu o mesmo prompt nas três vezes.
+    problem_prompts = [p for p in fake.prompts if only.prompt in p]
+    assert len(problem_prompts) == 3
 
 
 def test_run_handles_abort() -> None:
