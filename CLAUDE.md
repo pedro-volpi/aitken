@@ -5,11 +5,12 @@ acima) trata apenas das notas Obsidian — não se aplica ao código aqui.
 
 ## Política padrão de drills: retry-on-wrong
 
-Toda sessão de drill (hoje `drill tables`; planejados `squares`,
-`multidigit`, `tricks`) **reapresenta o mesmo problema até que a resposta
-seja correta**. `--count N` conta *problemas distintos a dominar*, nunca
-tentativas — erros não consomem o orçamento. Mudanças nesse contrato
-precisam ser discutidas com o usuário antes de serem implementadas.
+Toda sessão de drill (hoje: `tables`, `squares`, `cubes`, `factorial`;
+planejados: `multidigit`, `tricks`) **reapresenta o mesmo problema até
+que a resposta seja correta**. `--count N` conta *problemas distintos a
+dominar*, nunca tentativas — erros não consomem o orçamento. Mudanças
+nesse contrato precisam ser discutidas com o usuário antes de serem
+implementadas.
 
 Implementação em `DrillSession`: campo `_pending_retry: Problem | None` é
 atribuído em `record()` (None se correto, o próprio `problem` se errado) e
@@ -55,7 +56,7 @@ contrato de `DrillSession` deve respeitar a mesma restrição.
   em 3.14). Sintaxe PEP 758 (`except A, B:`) é válida e ruff format a
   aplica.
 - Toda mudança de código deve passar antes de commit:
-  - `pytest` (atualmente 89 testes, todos devem passar)
+  - `pytest` (atualmente 116 testes, todos devem passar)
   - `ruff check src tests`
   - `ruff format --check src tests`
   - `mypy` strict em `src/aitken` + `tests/` (config em `pyproject.toml`).
@@ -65,9 +66,12 @@ contrato de `DrillSession` deve respeitar a mesma restrição.
 
 Quatro camadas em um sentido: `ui/` → `session/` → `storage/` → `core/`.
 Nenhuma importação em sentido contrário. Novo gerador entra como
-implementação do `Protocol` em `core/generators/base.py` + novo subparser
-em `cli.py`; não toca `session/` nem `storage/`. Detalhes completos em
-`README.md`, seção "Implementação detalhada".
+implementação do `Protocol` em `core/generators/base.py` + novo
+subparser em `cli.py` (via `_add_<module>_subparser`) + um
+`cmd_drill_<module>` que constrói o gerador e chama `_run_drill(args,
+gen)`. Flags comuns (`--count`, `--seed`, `--db`, `--no-persist`) vêm de
+`_add_common_drill_args`. Não toca `session/` nem `storage/`. Detalhes
+completos em `README.md`, seção "Implementação detalhada".
 
 ## Proibições
 

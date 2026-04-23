@@ -1,10 +1,10 @@
-"""Gerador de quadrados.
+"""Gerador de cubos.
 
-Cobre de 2² até o limite configurado (default 25²). ``0²`` e ``1²`` são
+Cobre de 2³ até o limite configurado (default 10³). ``0³`` e ``1³`` são
 triviais e ficam de fora por padrão via ``exclude_trivial``.
 
-Chave canônica: ``"squares:N"``. Prompt: ``"N²"``. Resposta esperada:
-``str(N * N)``.
+Chave canônica: ``"cubes:N"``. Prompt: ``"N³"``. Resposta esperada:
+``str(N ** 3)``.
 """
 
 from collections.abc import Mapping, Sequence
@@ -16,12 +16,12 @@ from aitken.core.scheduler import sampling_weight
 
 
 @dataclass(frozen=True, slots=True)
-class SquaresParams:
-    """Configuração do gerador de quadrados.
+class CubesParams:
+    """Configuração do gerador de cubos.
 
     Attributes:
         min_base: menor base amostrável (inclusivo). Padrão ``2``.
-        max_base: maior base amostrável (inclusivo). Padrão ``25``.
+        max_base: maior base amostrável (inclusivo). Padrão ``10``.
         exclude_trivial: se ``True``, rejeita bases ``< 2``. Padrão ``True``.
 
     Invariantes (verificadas em ``__post_init__``):
@@ -31,7 +31,7 @@ class SquaresParams:
     """
 
     min_base: int = 2
-    max_base: int = 25
+    max_base: int = 10
     exclude_trivial: bool = True
 
     def __post_init__(self) -> None:
@@ -47,25 +47,22 @@ class SquaresParams:
                 )
 
 
-class SquaresGenerator:
-    """Gerador de quadrados com suporte a amostragem ponderada (SM-2)."""
+class CubesGenerator:
+    """Gerador de cubos com suporte a amostragem ponderada (SM-2)."""
 
-    module_id = "squares"
+    module_id = "cubes"
 
-    def __init__(self, params: SquaresParams) -> None:
+    def __init__(self, params: CubesParams) -> None:
         self._params = params
         effective_min = max(params.min_base, 2) if params.exclude_trivial else params.min_base
         self._bases: list[int] = list(range(effective_min, params.max_base + 1))
-        self._all_keys: list[str] = [f"squares:{n}" for n in self._bases]
+        self._all_keys: list[str] = [f"cubes:{n}" for n in self._bases]
 
     def all_keys(self) -> Sequence[str]:
         return self._all_keys
 
     def next(self, rng: Random, *, weights: Mapping[str, float] | None = None) -> Problem:
-        """Sorteia uma base na faixa e devolve o problema ``N²``.
-
-        Com ``weights``, amostra por chave; sem eles, escolha uniforme.
-        """
+        """Sorteia uma base na faixa e devolve o problema ``N³``."""
         if weights is None:
             n = rng.choice(self._bases)
         else:
@@ -75,9 +72,9 @@ class SquaresGenerator:
             n = self._base_from_key(chosen)
         return Problem(
             module_id=self.module_id,
-            key=f"squares:{n}",
-            prompt=f"{n}²",
-            expected_answer=str(n * n),
+            key=f"cubes:{n}",
+            prompt=f"{n}³",
+            expected_answer=str(n**3),
         )
 
     def check(self, problem: Problem, user_answer: str) -> bool:

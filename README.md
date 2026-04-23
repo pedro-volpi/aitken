@@ -21,14 +21,25 @@ pip install -e ".[dev]"
 ## Uso
 
 ```bash
-aitken drill tables                              # sessão de tabuada (30 problemas, faixa 2-9)
-aitken drill tables --count 30 --seed 42         # reproduzível com seed fixa
-aitken drill tables --min 2 --max 19             # estende a faixa (inclui 10-19)
-aitken drill tables --include-trivial            # inclui pares com ×0 e ×1
-aitken drill tables --no-persist                 # não grava no banco
+aitken drill tables                              # tabuada (default: 30 problemas, faixa 2-9)
+aitken drill tables --min 2 --max 19             # tabuada estendida
+aitken drill squares                             # quadrados (default: 2² a 25²)
+aitken drill cubes                               # cubos (default: 2³ a 10³)
+aitken drill factorial                           # fatoriais de 0! a 10! (faixa fixa)
 ```
 
-Outros módulos de drill (quadrados, multidígito, atalhos), `aitken diagnostic`, `aitken stats` e `aitken plot` estão listados em [Funcionalidades](#funcionalidades).
+### Parâmetros comuns a todo drill
+
+Todos os subcomandos `aitken drill <módulo>` aceitam as mesmas quatro flags de sessão:
+
+- `--count N` / `-n N` — número de problemas *distintos* a dominar (default 30; `factorial` usa 20 por ter pool menor).
+- `--seed N` — seed do gerador aleatório; sessões com a mesma seed produzem a mesma sequência inicial (porém o SM-2 diverge com base no histórico persistido).
+- `--db PATH` — arquivo SQLite do histórico (default em `$XDG_DATA_HOME/aitken/aitken.db`).
+- `--no-persist` — não grava tentativas nem o estado SM-2 desta sessão.
+
+Módulos com faixa ajustável (`tables`, `squares`, `cubes`) expõem também `--min`, `--max` e `--include-trivial`. `tables` ainda tem `--no-commutative`. `factorial` não tem flags adicionais: o pool é fixo de `0!` a `10!`. Rode `aitken drill <módulo> --help` para os detalhes.
+
+Outros módulos planejados (multidígito, atalhos), `aitken diagnostic` e `aitken export` estão listados em [Funcionalidades](#funcionalidades).
 
 
 ## Funcionalidades
@@ -42,9 +53,11 @@ Linhas marcadas com ✗ são planejadas — o nome exato do comando pode mudar q
 
 | Funcionalidade | Descrição | Como chamar | Implementado |
 | --- | --- | --- | --- |
-| Treino de tabuada | Sessão cronometrada de multiplicações na faixa configurada (padrão 2-9, estensível até qualquer inteiro). Amostragem por SM-2 + retry-on-wrong. Imprime feedback por tentativa e resumo de acertos + latência ao final. Aceita `--count`, `--min`, `--max`, `--seed`, `--include-trivial`, `--no-persist`. | `aitken drill tables` | ✓ |
-| Histórico persistente | Cada tentativa é gravada na tabela `attempts` e o estado SM-2 (`ease_factor`, streak de acertos) por chave é gravado em `schedule`. Banco em SQLite local (`~/.local/share/aitken/aitken.db` por padrão, respeitando `$XDG_DATA_HOME`). | automático em qualquer `drill` (desabilitável com `--no-persist`) | ✓ |
-| Treino de quadrados | Sessão cronometrada de quadrados até 25². | `aitken drill squares` | ✗ |
+| Treino de tabuada | Sessão cronometrada de multiplicações na faixa configurada (padrão 2-9, estensível até qualquer inteiro). Amostragem por SM-2 + retry-on-wrong. Aceita `--min`, `--max`, `--include-trivial`, `--no-commutative` além dos [parâmetros comuns](#par%C3%A2metros-comuns-a-todo-drill). | `aitken drill tables` | ✓ |
+| Treino de quadrados | Sessão de `N²` para `N` em `[--min, --max]` (default 2–25). Aceita `--min`, `--max`, `--include-trivial`. | `aitken drill squares` | ✓ |
+| Treino de cubos | Sessão de `N³` para `N` em `[--min, --max]` (default 2–10). Aceita `--min`, `--max`, `--include-trivial`. | `aitken drill cubes` | ✓ |
+| Treino de fatoriais | Sessão de `N!` com `N` sorteado no pool fixo `{0, 1, ..., 10}` — sem parâmetros de faixa. | `aitken drill factorial` | ✓ |
+| Histórico persistente | Cada tentativa é gravada na tabela `attempts` e o estado SM-2 (`ease_factor`, streak de acertos) por chave em `schedule`. Banco em SQLite local (`~/.local/share/aitken/aitken.db` por padrão, respeitando `$XDG_DATA_HOME`). | automático em qualquer `drill` (desabilitável com `--no-persist`) | ✓ |
 | Treino multidígito | Multiplicações 2d×1d, 2d×2d, 3d×1d, 3d×2d, 3d×3d. | `aitken drill multidigit` | ✗ |
 | Treino de atalhos | Operações com atalhos mentais: ×11, ×25, ×125, (10a+5)². | `aitken drill tricks` | ✗ |
 | Diagnóstico de fraquezas | Bateria de 100 pares aleatórios; produz mapa dos pares mais lentos, estatísticas agregadas de latência (mediana, p90) e gráficos semanais de evolução (matplotlib). | `aitken diagnostic` | ✗ |

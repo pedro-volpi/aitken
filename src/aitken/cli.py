@@ -2,17 +2,17 @@
 
 A CLI é a única camada autorizada a criar instâncias concretas e ligá-las
 umas às outras. Todas as outras camadas conversam via interfaces
-(``Generator``, ``AttemptRepo``, ``DrillSession``). Adicionar um novo
-módulo de drill (quadrados, soma, divisão, etc.) é só adicionar um
-subparser e um ``cmd_*`` correspondente — o restante é reutilizado.
+(``Generator``, ``AttemptRepo``, ``ScheduleRepo``, ``DrillSession``).
 
-Convenção: cada módulo de drill vira um subcomando de ``drill``. Ex.:
+Adicionar um novo módulo de drill (quadrados, cubos, fatoriais, etc.) é:
 
-    aitken drill tables --min 2 --max 9 --count 30
-    aitken drill squares --max 25 --count 20     # futuro
+1. Implementar o ``Protocol`` em :mod:`aitken.core.generators.base`.
+2. Registrar um subparser em ``build_parser`` via um ``_add_<module>_subparser``.
+3. Escrever um ``cmd_drill_<module>(args)`` que constrói o gerador e
+   delega a :func:`_run_drill` (que cuida do banco, sessão e UI).
 
-Parser é devolvido pela :func:`build_parser` separadamente do
-:func:`main` para permitir testes (``build_parser().parse_args([...])``).
+A função :func:`build_parser` é separada de :func:`main` para permitir
+testes (``build_parser().parse_args([...])``).
 """
 
 import argparse
@@ -22,6 +22,10 @@ from pathlib import Path
 from random import Random
 
 from aitken.config import DEFAULT_DB_PATH
+from aitken.core.generators.base import Generator
+from aitken.core.generators.cubes import CubesGenerator, CubesParams
+from aitken.core.generators.factorial import FactorialGenerator
+from aitken.core.generators.squares import SquaresGenerator, SquaresParams
 from aitken.core.generators.tables import TablesGenerator, TablesParams
 from aitken.session.drill import DrillSession
 from aitken.storage.db import open_db
@@ -44,53 +48,26 @@ def build_parser() -> argparse.ArgumentParser:
     drill_sub = drill.add_subparsers(dest="module", required=True)
 
     _add_tables_subparser(drill_sub)
+    _add_squares_subparser(drill_sub)
+    _add_cubes_subparser(drill_sub)
+    _add_factorial_subparser(drill_sub)
     return parser
 
 
-def _add_tables_subparser(
-    drill_sub: argparse._SubParsersAction[argparse.ArgumentParser],
-) -> None:
-    """Configura o subcomando ``drill tables``."""
-    p = drill_sub.add_parser(
-        "tables",
-        help="Tabuada de multiplicação.",
-        description=(
-            "Sessão de tabuada: sorteia pares (a, b) na faixa "
-            "[--min, --max] e cronometra cada resposta. "
-            "Por padrão, 30 problemas sem pares triviais (×0, ×1)."
-        ),
-    )
-    p.add_argument(
-        "--min",
-        type=int,
-        default=2,
-        dest="min_factor",
-        help="Menor fator incluído (default: 2).",
-    )
-    p.add_argument(
-        "--max",
-        type=int,
-        default=9,
-        dest="max_factor",
-        help="Maior fator incluído (default: 9).",
-    )
+def _add_common_drill_args(p: argparse.ArgumentParser, *, default_count: int = 30) -> None:
+    """Flags comuns a todos os subcomandos de drill.
+
+    Cada chamada adiciona: ``--count/-n``, ``--seed``, ``--db``,
+    ``--no-persist``. Módulos individuais acrescentam flags específicas
+    (faixa, exclusão de triviais etc.).
+    """
     p.add_argument(
         "--count",
         "-n",
         type=int,
-        default=30,
+        default=default_count,
         dest="count",
-        help="Número de problemas na sessão (default: 30).",
-    )
-    p.add_argument(
-        "--include-trivial",
-        action="store_true",
-        help="Inclui pares com fator 0 ou 1 (default: exclui).",
-    )
-    p.add_argument(
-        "--no-commutative",
-        action="store_true",
-        help="Trata 7×8 e 8×7 como pares distintos nas stats.",
+        help=f"Número de problemas distintos a dominar (default: {default_count}).",
     )
     p.add_argument(
         "--seed",
@@ -107,34 +84,188 @@ def _add_tables_subparser(
     p.add_argument(
         "--no-persist",
         action="store_true",
-        help="Não grava esta sessão no banco.",
+        help="Não grava esta sessão nem o estado SM-2 no banco.",
+    )
+
+
+def _add_tables_subparser(
+    drill_sub: argparse._SubParsersAction[argparse.ArgumentParser],
+) -> None:
+    """Configura o subcomando ``drill tables``."""
+    p = drill_sub.add_parser(
+        "tables",
+        help="Tabuada de multiplicação.",
+        description=(
+            "Sessão de tabuada: sorteia pares (a, b) na faixa "
+            "[--min, --max] e cronometra cada resposta. "
+            "Por padrão, 30 problemas sem pares triviais (×0, ×1)."
+        ),
+    )
+    _add_common_drill_args(p)
+    p.add_argument(
+        "--min",
+        type=int,
+        default=2,
+        dest="min_factor",
+        help="Menor fator incluído (default: 2).",
+    )
+    p.add_argument(
+        "--max",
+        type=int,
+        default=9,
+        dest="max_factor",
+        help="Maior fator incluído (default: 9).",
+    )
+    p.add_argument(
+        "--include-trivial",
+        action="store_true",
+        help="Inclui pares com fator 0 ou 1 (default: exclui).",
+    )
+    p.add_argument(
+        "--no-commutative",
+        action="store_true",
+        help="Trata 7×8 e 8×7 como pares distintos nas stats.",
     )
     p.set_defaults(func=cmd_drill_tables)
 
 
-def cmd_drill_tables(args: argparse.Namespace) -> int:
-    """Executa o subcomando ``drill tables``.
+def _add_squares_subparser(
+    drill_sub: argparse._SubParsersAction[argparse.ArgumentParser],
+) -> None:
+    """Configura o subcomando ``drill squares``."""
+    p = drill_sub.add_parser(
+        "squares",
+        help="Quadrados (N²).",
+        description=(
+            "Sessão de quadrados: sorteia bases em [--min, --max] e "
+            "cronometra cada N² até a resposta ser acertada."
+        ),
+    )
+    _add_common_drill_args(p)
+    p.add_argument(
+        "--min",
+        type=int,
+        default=2,
+        dest="min_base",
+        help="Menor base incluída (default: 2).",
+    )
+    p.add_argument(
+        "--max",
+        type=int,
+        default=25,
+        dest="max_base",
+        help="Maior base incluída (default: 25).",
+    )
+    p.add_argument(
+        "--include-trivial",
+        action="store_true",
+        help="Inclui 0² e 1² (default: exclui).",
+    )
+    p.set_defaults(func=cmd_drill_squares)
 
-    Fluxo:
-        1. Monta :class:`TablesParams` a partir dos argumentos.
-        2. Abre o banco (a não ser que ``--no-persist``).
-        3. Cria :class:`DrillSession` com gerador, repo e RNG.
-        4. Delega à UI em texto (:func:`aitken.ui.plain.run`).
-        5. Fecha a conexão.
 
-    Returns:
-        ``0`` em sucesso. Erros de validação sobem como exceções e são
-        tratados em :func:`main`.
+def _add_cubes_subparser(
+    drill_sub: argparse._SubParsersAction[argparse.ArgumentParser],
+) -> None:
+    """Configura o subcomando ``drill cubes``."""
+    p = drill_sub.add_parser(
+        "cubes",
+        help="Cubos (N³).",
+        description=(
+            "Sessão de cubos: sorteia bases em [--min, --max] e "
+            "cronometra cada N³ até a resposta ser acertada."
+        ),
+    )
+    _add_common_drill_args(p)
+    p.add_argument(
+        "--min",
+        type=int,
+        default=2,
+        dest="min_base",
+        help="Menor base incluída (default: 2).",
+    )
+    p.add_argument(
+        "--max",
+        type=int,
+        default=10,
+        dest="max_base",
+        help="Maior base incluída (default: 10).",
+    )
+    p.add_argument(
+        "--include-trivial",
+        action="store_true",
+        help="Inclui 0³ e 1³ (default: exclui).",
+    )
+    p.set_defaults(func=cmd_drill_cubes)
+
+
+def _add_factorial_subparser(
+    drill_sub: argparse._SubParsersAction[argparse.ArgumentParser],
+) -> None:
+    """Configura o subcomando ``drill factorial``.
+
+    Sem flags de faixa — o pool é fixo, de ``0!`` a ``10!``.
     """
+    p = drill_sub.add_parser(
+        "factorial",
+        help="Fatoriais de 0! a 10!.",
+        description=(
+            "Sessão de fatoriais: amostra entre 0! e 10! (faixa fixa) "
+            "e cronometra cada resposta até ser acertada."
+        ),
+    )
+    _add_common_drill_args(p, default_count=20)
+    p.set_defaults(func=cmd_drill_factorial)
+
+
+def cmd_drill_tables(args: argparse.Namespace) -> int:
+    """Executa o subcomando ``drill tables``."""
     params = TablesParams(
         min_factor=args.min_factor,
         max_factor=args.max_factor,
         commutative_pairs=not args.no_commutative,
         exclude_trivial=not args.include_trivial,
     )
-    generator = TablesGenerator(params)
-    rng = Random(args.seed)
+    return _run_drill(args, TablesGenerator(params))
 
+
+def cmd_drill_squares(args: argparse.Namespace) -> int:
+    """Executa o subcomando ``drill squares``."""
+    params = SquaresParams(
+        min_base=args.min_base,
+        max_base=args.max_base,
+        exclude_trivial=not args.include_trivial,
+    )
+    return _run_drill(args, SquaresGenerator(params))
+
+
+def cmd_drill_cubes(args: argparse.Namespace) -> int:
+    """Executa o subcomando ``drill cubes``."""
+    params = CubesParams(
+        min_base=args.min_base,
+        max_base=args.max_base,
+        exclude_trivial=not args.include_trivial,
+    )
+    return _run_drill(args, CubesGenerator(params))
+
+
+def cmd_drill_factorial(args: argparse.Namespace) -> int:
+    """Executa o subcomando ``drill factorial``."""
+    return _run_drill(args, FactorialGenerator())
+
+
+def _run_drill(args: argparse.Namespace, generator: Generator) -> int:
+    """Fluxo comum a todos os drills: abre DB, monta sessão, roda UI.
+
+    Args:
+        args: ``Namespace`` já com ``count``, ``seed``, ``db``, ``no_persist``.
+        generator: gerador específico do módulo (tables, squares, ...).
+
+    Returns:
+        ``0`` em sucesso. Erros de validação sobem como ``ValueError`` e
+        são tratados em :func:`main`.
+    """
+    rng = Random(args.seed)
     attempt_repo: AttemptRepo | None = None
     schedule_repo: ScheduleRepo | None = None
     conn: sqlite3.Connection | None = None
