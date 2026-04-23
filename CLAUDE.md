@@ -69,7 +69,7 @@ Nenhuma importação em sentido contrário. Novo gerador entra como
 implementação do `Protocol` em `core/generators/base.py` + novo
 subparser em `cli.py` (via `_add_<module>_subparser`) + um
 `cmd_drill_<module>` que constrói o gerador e chama `_run_drill(args,
-gen)`. Flags comuns (`--count`, `--seed`, `--db`, `--no-persist`) vêm de
+gen)`. Flags comuns (`--count`, `--db`, `--no-persist`) vêm de
 `_add_common_drill_args`. Não toca `session/` nem `storage/`. Detalhes
 completos em `README.md`, seção "Implementação detalhada".
 

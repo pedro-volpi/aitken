@@ -30,10 +30,9 @@ aitken drill factorial                           # fatoriais de 0! a 10! (faixa 
 
 ### Parâmetros comuns a todo drill
 
-Todos os subcomandos `aitken drill <módulo>` aceitam as mesmas quatro flags de sessão:
+Todos os subcomandos `aitken drill <módulo>` aceitam as mesmas três flags de sessão:
 
 - `--count N` / `-n N` — número de problemas *distintos* a dominar (default 30; `factorial` usa 20 por ter pool menor).
-- `--seed N` — seed do gerador aleatório; sessões com a mesma seed produzem a mesma sequência inicial (porém o SM-2 diverge com base no histórico persistido).
 - `--db PATH` — arquivo SQLite do histórico (default em `$XDG_DATA_HOME/aitken/aitken.db`).
 - `--no-persist` — não grava tentativas nem o estado SM-2 desta sessão.
 
@@ -82,7 +81,7 @@ ui/  →  session/  →  storage/
 
 ## Implementação detalhada
 
-Esta seção expande o diagrama de quatro camadas seguindo uma sessão real — `aitken drill tables --count 30 --seed 42` — da linha de comando até o `INSERT` no SQLite, e termina com um grafo `dot` das chamadas. O objetivo é que um leitor novo consiga abrir qualquer arquivo do projeto sabendo em que papel ele entra.
+Esta seção expande o diagrama de quatro camadas seguindo uma sessão real — `aitken drill tables --count 30` — da linha de comando até o `INSERT` no SQLite, e termina com um grafo `dot` das chamadas. O objetivo é que um leitor novo consiga abrir qualquer arquivo do projeto sabendo em que papel ele entra.
 
 ### Camadas e responsabilidades
 
@@ -109,7 +108,7 @@ Cinco dataclasses formam o vocabulário compartilhado entre as camadas:
 Considere:
 
 ```bash
-aitken drill tables --count 30 --seed 42
+aitken drill tables --count 30
 ```
 
 **Parsing (`ui/` entrando em `cli.py`)**
@@ -121,7 +120,7 @@ aitken drill tables --count 30 --seed 42
 
 **Bootstrap (`storage/` e `core/`)**
 
-5. `cmd_drill_tables` instancia `TablesParams(min_factor=2, max_factor=9, commutative_pairs=True, exclude_trivial=True)`. O `__post_init__` rejeita `min_factor < 0`, `min_factor > max_factor` e faixas que ficam vazias após `exclude_trivial`. Com os params válidos, constrói `TablesGenerator(params)` e `Random(args.seed)` — o seed fixo é o que dá reprodutibilidade.
+5. `cmd_drill_tables` instancia `TablesParams(min_factor=2, max_factor=9, commutative_pairs=True, exclude_trivial=True)`. O `__post_init__` rejeita `min_factor < 0`, `min_factor > max_factor` e faixas que ficam vazias após `exclude_trivial`. Com os params válidos, constrói `TablesGenerator(params)` e um `Random()` sem seed — a CLI não expõe `--seed` porque, com o scheduler SM-2 persistido, é o histórico acumulado que dita o que reaparece, não a semente. Quem precisar de reprodutibilidade (ex.: testes) constrói `DrillSession(rng=Random(42))` diretamente.
 6. Como `--no-persist` não foi passado, chama `open_db(args.db)`. A função cria o diretório pai se necessário, abre a conexão em autocommit e aplica três pragmas: `journal_mode=WAL` (leituras concorrentes não bloqueiam escritas), `foreign_keys=ON` (SQLite desabilita por padrão), `synchronous=NORMAL` (perdemos só a última transação em crash do SO, não do processo). Em seguida chama `migrate(conn)`, que lê a tabela `schema_version`, aplica só as migrações pendentes e é idempotente — rodar duas vezes é no-op.
 7. `AttemptRepo(conn)` e `ScheduleRepo(conn)` embrulham a conexão (stateless além dela). `DrillSession(generator, attempt_repo, schedule_repo, max_problems=30, rng)` valida `max_problems > 0`, guarda as cinco referências injetadas e chama `schedule_repo.load("tables")` para hidratar o dicionário interno de `Card` com o que já existia no banco — assim uma sessão nova retoma exatamente onde a anterior parou.
 

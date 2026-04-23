@@ -50,8 +50,6 @@ def test_parser_tables_overrides() -> None:
             "15",
             "--include-trivial",
             "--no-commutative",
-            "--seed",
-            "42",
             "--no-persist",
         ]
     )
@@ -60,7 +58,6 @@ def test_parser_tables_overrides() -> None:
     assert args.count == 15
     assert args.include_trivial is True
     assert args.no_commutative is True
-    assert args.seed == 42
     assert args.no_persist is True
 
 
@@ -78,8 +75,6 @@ def test_main_runs_drill_tables(tmp_path: Path) -> None:
         "tables",
         "--count",
         "3",
-        "--seed",
-        "42",
         "--db",
         str(db_path),
     ]
@@ -134,7 +129,7 @@ def test_main_runs_drill_squares(tmp_path: Path) -> None:
         n = int(m.group(1))
         return str(n * n)
 
-    argv = ["drill", "squares", "--count", "3", "--seed", "7", "--db", str(db_path)]
+    argv = ["drill", "squares", "--count", "3", "--db", str(db_path)]
     with patch("builtins.input", fake_input):
         rc = main(argv)
     assert rc == 0
@@ -156,7 +151,7 @@ def test_main_runs_drill_factorial(tmp_path: Path) -> None:
         assert m is not None
         return str(_fac(int(m.group(1))))
 
-    argv = ["drill", "factorial", "--count", "3", "--seed", "0", "--db", str(db_path)]
+    argv = ["drill", "factorial", "--count", "3", "--db", str(db_path)]
     with patch("builtins.input", fake_input):
         rc = main(argv)
     assert rc == 0

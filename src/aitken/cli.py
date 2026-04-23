@@ -49,12 +49,11 @@ Módulos de drill disponíveis:
 Exemplos:
   aitken drill tables                            # tabuada padrão, 30 problemas
   aitken drill tables --min 2 --max 19 -n 40     # tabuada estendida, 40 problemas
-  aitken drill squares --seed 42                 # reproduzível
+  aitken drill cubes -n 40                       # sessão maior de cubos
   aitken drill factorial --no-persist            # sessão descartável
 
 Flags comuns a todo drill:
   --count/-n N   problemas distintos a dominar
-  --seed N       seed do gerador aleatório
   --db PATH      caminho do banco SQLite
   --no-persist   não grava tentativas nem estado SM-2
 
@@ -69,7 +68,7 @@ Módulos:
   factorial   fatoriais (N!), pool fixo 0..10
 
 Cada módulo expõe --help com suas flags específicas, além das comuns
-(--count, --seed, --db, --no-persist).
+(--count, --db, --no-persist).
 """
 
 
@@ -116,9 +115,9 @@ def build_parser() -> argparse.ArgumentParser:
 def _add_common_drill_args(p: argparse.ArgumentParser, *, default_count: int = 30) -> None:
     """Flags comuns a todos os subcomandos de drill.
 
-    Cada chamada adiciona: ``--count/-n``, ``--seed``, ``--db``,
-    ``--no-persist``. Módulos individuais acrescentam flags específicas
-    (faixa, exclusão de triviais etc.).
+    Cada chamada adiciona: ``--count/-n``, ``--db``, ``--no-persist``.
+    Módulos individuais acrescentam flags específicas (faixa, exclusão de
+    triviais etc.).
     """
     p.add_argument(
         "--count",
@@ -127,12 +126,6 @@ def _add_common_drill_args(p: argparse.ArgumentParser, *, default_count: int = 3
         default=default_count,
         dest="count",
         help=f"Número de problemas distintos a dominar (default: {default_count}).",
-    )
-    p.add_argument(
-        "--seed",
-        type=int,
-        default=None,
-        help="Seed do gerador aleatório (reprodutibilidade).",
     )
     p.add_argument(
         "--db",
@@ -317,14 +310,14 @@ def _run_drill(args: argparse.Namespace, generator: Generator) -> int:
     """Fluxo comum a todos os drills: abre DB, monta sessão, roda UI.
 
     Args:
-        args: ``Namespace`` já com ``count``, ``seed``, ``db``, ``no_persist``.
+        args: ``Namespace`` já com ``count``, ``db``, ``no_persist``.
         generator: gerador específico do módulo (tables, squares, ...).
 
     Returns:
         ``0`` em sucesso. Erros de validação sobem como ``ValueError`` e
         são tratados em :func:`main`.
     """
-    rng = Random(args.seed)
+    rng = Random()
     attempt_repo: AttemptRepo | None = None
     schedule_repo: ScheduleRepo | None = None
     conn: sqlite3.Connection | None = None
