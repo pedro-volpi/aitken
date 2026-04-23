@@ -17,11 +17,11 @@ def test_squares_module_id() -> None:
 
 
 def test_squares_default_range_all_keys() -> None:
-    gen = SquaresGenerator(SquaresParams())  # 2..25
+    gen = SquaresGenerator(SquaresParams())  # 11..25
     keys = list(gen.all_keys())
-    assert keys[0] == "squares:2"
+    assert keys[0] == "squares:11"
     assert keys[-1] == "squares:25"
-    assert len(keys) == 24
+    assert len(keys) == 15
 
 
 def test_squares_sample_and_answer() -> None:
@@ -37,15 +37,15 @@ def test_squares_sample_and_answer() -> None:
 
 
 def test_squares_weighted_respects_highest_weight() -> None:
-    gen = SquaresGenerator(SquaresParams())
+    gen = SquaresGenerator(SquaresParams())  # 11..25
     weights = {k: 0.01 for k in gen.all_keys()}
-    weights["squares:7"] = 100.0
+    weights["squares:17"] = 100.0
     rng = Random(0)
     counts: dict[str, int] = {}
     for _ in range(200):
         p = gen.next(rng, weights=weights)
         counts[p.key] = counts.get(p.key, 0) + 1
-    assert counts["squares:7"] > 150  # dominância esmagadora
+    assert counts["squares:17"] > 150  # dominância esmagadora
 
 
 def test_squares_check_accepts_correct() -> None:
@@ -92,11 +92,11 @@ def test_cubes_module_id() -> None:
 
 
 def test_cubes_default_range_all_keys() -> None:
-    gen = CubesGenerator(CubesParams())  # 2..10
+    gen = CubesGenerator(CubesParams())  # 3..10
     keys = list(gen.all_keys())
-    assert keys[0] == "cubes:2"
+    assert keys[0] == "cubes:3"
     assert keys[-1] == "cubes:10"
-    assert len(keys) == 9
+    assert len(keys) == 8
 
 
 def test_cubes_sample_and_answer() -> None:

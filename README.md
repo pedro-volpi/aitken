@@ -23,8 +23,8 @@ pip install -e ".[dev]"
 ```bash
 aitken drill tables                              # tabuada (default: 30 problemas, faixa 2-9)
 aitken drill tables --min 2 --max 19             # tabuada estendida
-aitken drill squares                             # quadrados (default: 2² a 25²)
-aitken drill cubes                               # cubos (default: 2³ a 10³)
+aitken drill squares                             # quadrados (default: 11² a 25²; 2²-10² já saem da tabuada)
+aitken drill cubes                               # cubos (default: 3³ a 10³)
 aitken drill factorial                           # fatoriais de 0! a 10! (faixa fixa)
 ```
 
@@ -58,8 +58,8 @@ Linhas marcadas com ✗ são planejadas — o nome exato do comando pode mudar q
 | Funcionalidade | Descrição | Como chamar | Implementado |
 | --- | --- | --- | --- |
 | Treino de tabuada | Sessão cronometrada de multiplicações na faixa configurada (padrão 2-9, estensível até qualquer inteiro). Amostragem por SM-2 + retry-on-wrong. Aceita `--min`, `--max`, `--include-trivial`, `--no-commutative` além dos [parâmetros comuns](#par%C3%A2metros-comuns-a-todo-drill). | `aitken drill tables` | ✓ |
-| Treino de quadrados | Sessão de `N²` para `N` em `[--min, --max]` (default 2–25). Aceita `--min`, `--max`, `--include-trivial`. | `aitken drill squares` | ✓ |
-| Treino de cubos | Sessão de `N³` para `N` em `[--min, --max]` (default 2–10). Aceita `--min`, `--max`, `--include-trivial`. | `aitken drill cubes` | ✓ |
+| Treino de quadrados | Sessão de `N²` para `N` em `[--min, --max]` (default 11–25; `2²` a `10²` já saem da tabuada, daí o corte). Aceita `--min`, `--max`, `--include-trivial`. | `aitken drill squares` | ✓ |
+| Treino de cubos | Sessão de `N³` para `N` em `[--min, --max]` (default 3–10; `2³ = 8` é trivial). Aceita `--min`, `--max`, `--include-trivial`. | `aitken drill cubes` | ✓ |
 | Treino de fatoriais | Sessão de `N!` com `N` sorteado no pool fixo `{0, 1, ..., 10}` — sem parâmetros de faixa. | `aitken drill factorial` | ✓ |
 | Histórico persistente | Cada tentativa é gravada na tabela `attempts` e o estado SM-2 (`ease_factor`, streak de acertos) por chave em `schedule`. Banco em SQLite dentro do projeto (`data/aitken.db`). Para análise ad-hoc, o banco é consultável direto com `sqlite3` ou qualquer ferramenta SQL. | automático em qualquer `drill` (desabilitável com `--no-persist`) | ✓ |
 | Treino multidígito | Multiplicações 2d×1d, 2d×2d, 3d×1d, 3d×2d, 3d×3d. | `aitken drill multidigit` | ✗ |

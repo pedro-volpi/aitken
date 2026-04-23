@@ -97,7 +97,7 @@ def test_main_runs_drill_tables(tmp_path: Path) -> None:
 def test_parser_squares_defaults() -> None:
     args = build_parser().parse_args(["drill", "squares"])
     assert args.module == "squares"
-    assert args.min_base == 2
+    assert args.min_base == 11
     assert args.max_base == 25
     assert args.count == 30
     assert args.include_trivial is False
@@ -106,7 +106,7 @@ def test_parser_squares_defaults() -> None:
 def test_parser_cubes_defaults() -> None:
     args = build_parser().parse_args(["drill", "cubes"])
     assert args.module == "cubes"
-    assert args.min_base == 2
+    assert args.min_base == 3
     assert args.max_base == 10
 
 

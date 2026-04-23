@@ -1,7 +1,8 @@
 """Gerador de cubos.
 
-Cobre de 2³ até o limite configurado (default 10³). ``0³`` e ``1³`` são
-triviais e ficam de fora por padrão via ``exclude_trivial``.
+Cobre de 3³ até o limite configurado (default 10³) por padrão. ``0³``,
+``1³`` e ``2³`` (=8, trivial também) ficam de fora por padrão; os dois
+primeiros via ``exclude_trivial``, o terceiro via ``min_base = 3``.
 
 Chave canônica: ``"cubes:N"``. Prompt: ``"N³"``. Resposta esperada:
 ``str(N ** 3)``.
@@ -20,7 +21,7 @@ class CubesParams:
     """Configuração do gerador de cubos.
 
     Attributes:
-        min_base: menor base amostrável (inclusivo). Padrão ``2``.
+        min_base: menor base amostrável (inclusivo). Padrão ``3``.
         max_base: maior base amostrável (inclusivo). Padrão ``10``.
         exclude_trivial: se ``True``, rejeita bases ``< 2``. Padrão ``True``.
 
@@ -30,7 +31,7 @@ class CubesParams:
         * após aplicar ``exclude_trivial``, o pool não fica vazio
     """
 
-    min_base: int = 2
+    min_base: int = 3
     max_base: int = 10
     exclude_trivial: bool = True
 

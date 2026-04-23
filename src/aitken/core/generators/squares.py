@@ -1,7 +1,9 @@
 """Gerador de quadrados.
 
-Cobre de 2² até o limite configurado (default 25²). ``0²`` e ``1²`` são
-triviais e ficam de fora por padrão via ``exclude_trivial``.
+Cobre de 11² até o limite configurado (default 25²) por padrão — a faixa
+2²–10² sai "de graça" da tabuada, então o valor do drill de quadrados
+está nas bases maiores. ``0²`` e ``1²`` são triviais e ficam de fora
+via ``exclude_trivial``.
 
 Chave canônica: ``"squares:N"``. Prompt: ``"N²"``. Resposta esperada:
 ``str(N * N)``.
@@ -20,7 +22,7 @@ class SquaresParams:
     """Configuração do gerador de quadrados.
 
     Attributes:
-        min_base: menor base amostrável (inclusivo). Padrão ``2``.
+        min_base: menor base amostrável (inclusivo). Padrão ``11``.
         max_base: maior base amostrável (inclusivo). Padrão ``25``.
         exclude_trivial: se ``True``, rejeita bases ``< 2``. Padrão ``True``.
 
@@ -30,7 +32,7 @@ class SquaresParams:
         * após aplicar ``exclude_trivial``, o pool não fica vazio
     """
 
-    min_base: int = 2
+    min_base: int = 11
     max_base: int = 25
     exclude_trivial: bool = True
 

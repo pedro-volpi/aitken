@@ -42,8 +42,8 @@ ponderado por latência (pares difíceis aparecem com mais frequência).
 _ROOT_EPILOG = """\
 Módulos de drill disponíveis:
   tables      Tabuada de multiplicação (faixa configurável, default 2-9).
-  squares     Quadrados N² (default 2-25).
-  cubes       Cubos N³ (default 2-10).
+  squares     Quadrados N² (default 11-25; 2-10 já saem da tabuada).
+  cubes       Cubos N³ (default 3-10).
   factorial   Fatoriais N! (pool fixo 0 a 10).
 
 Exemplos:
@@ -199,9 +199,9 @@ def _add_squares_subparser(
     p.add_argument(
         "--min",
         type=int,
-        default=2,
+        default=11,
         dest="min_base",
-        help="Menor base incluída (default: 2).",
+        help="Menor base incluída (default: 11).",
     )
     p.add_argument(
         "--max",
@@ -234,9 +234,9 @@ def _add_cubes_subparser(
     p.add_argument(
         "--min",
         type=int,
-        default=2,
+        default=3,
         dest="min_base",
-        help="Menor base incluída (default: 2).",
+        help="Menor base incluída (default: 3).",
     )
     p.add_argument(
         "--max",
