@@ -21,6 +21,7 @@ import sys
 from pathlib import Path
 from random import Random
 
+from aitken import __version__
 from aitken.config import DEFAULT_DB_PATH
 from aitken.core.generators.base import Generator
 from aitken.core.generators.cubes import CubesGenerator, CubesParams
@@ -32,20 +33,78 @@ from aitken.storage.db import open_db
 from aitken.storage.repositories import AttemptRepo, ScheduleRepo
 from aitken.ui import plain
 
+_ROOT_DESCRIPTION = """\
+Treinador CLI de aritmética mental com foco em fluência por latência.
+Todo drill usa retry-on-wrong (erros reapresentam o problema) e SM-2
+ponderado por latência (pares difíceis aparecem com mais frequência).
+"""
+
+_ROOT_EPILOG = """\
+Módulos de drill disponíveis:
+  tables      Tabuada de multiplicação (faixa configurável, default 2-9).
+  squares     Quadrados N² (default 2-25).
+  cubes       Cubos N³ (default 2-10).
+  factorial   Fatoriais N! (pool fixo 0 a 10).
+
+Exemplos:
+  aitken drill tables                            # tabuada padrão, 30 problemas
+  aitken drill tables --min 2 --max 19 -n 40     # tabuada estendida, 40 problemas
+  aitken drill squares --seed 42                 # reproduzível
+  aitken drill factorial --no-persist            # sessão descartável
+
+Flags comuns a todo drill:
+  --count/-n N   problemas distintos a dominar
+  --seed N       seed do gerador aleatório
+  --db PATH      caminho do banco SQLite
+  --no-persist   não grava tentativas nem estado SM-2
+
+Ajuda de cada módulo: aitken drill <módulo> --help
+"""
+
+_DRILL_EPILOG = """\
+Módulos:
+  tables      multiplicações (a × b)
+  squares     quadrados (N²)
+  cubes       cubos (N³)
+  factorial   fatoriais (N!), pool fixo 0..10
+
+Cada módulo expõe --help com suas flags específicas, além das comuns
+(--count, --seed, --db, --no-persist).
+"""
+
 
 def build_parser() -> argparse.ArgumentParser:
     """Constrói e retorna o parser raiz já com todos os subcomandos."""
     parser = argparse.ArgumentParser(
         prog="aitken",
-        description="Treinador de aritmética mental por latência.",
+        description=_ROOT_DESCRIPTION,
+        epilog=_ROOT_EPILOG,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    subparsers = parser.add_subparsers(dest="command", required=True)
+    parser.add_argument(
+        "--version",
+        "-V",
+        action="version",
+        version=f"aitken {__version__}",
+    )
+    subparsers = parser.add_subparsers(
+        dest="command",
+        required=True,
+        metavar="{drill}",
+    )
 
     drill = subparsers.add_parser(
         "drill",
         help="Executa uma sessão de treino.",
+        description="Executa uma sessão de treino em um dos módulos disponíveis.",
+        epilog=_DRILL_EPILOG,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    drill_sub = drill.add_subparsers(dest="module", required=True)
+    drill_sub = drill.add_subparsers(
+        dest="module",
+        required=True,
+        metavar="{tables,squares,cubes,factorial}",
+    )
 
     _add_tables_subparser(drill_sub)
     _add_squares_subparser(drill_sub)
