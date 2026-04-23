@@ -30,20 +30,6 @@ aitken drill tables --no-persist                 # não grava no banco
 
 Outros módulos de drill (quadrados, multidígito, atalhos), `aitken diagnostic`, `aitken stats` e `aitken plot` estão listados em [Funcionalidades](#funcionalidades).
 
-## Arquitetura
-
-Quatro camadas com dependências em um único sentido:
-
-```
-ui/  →  session/  →  storage/
-                 ↘            ↘
-                   core/  ←───┘
-```
-
-- **`core/`** — lógica pura: geradores de problemas, scheduler SM-2, regras de progressão, estatísticas. Sem I/O, sem UI, sem SQLite.
-- **`storage/`** — adaptador SQLite. Depende apenas dos tipos de `core/`.
-- **`session/`** — casos de uso (DrillSession, DiagnosticSession). Orquestra `core/` + `storage/`. Hoje devolve resultados de forma síncrona; `session/events.py` fica reservado para uma API baseada em eventos que UIs assíncronas (Textual, GUI) consumirão sem tocar em `core/`.
-- **`ui/`** — `ui/plain.py` é o adaptador de terminal síncrono que hoje executa todas as sessões. `ui/textual/` e `ui/plot.py` são ganchos para adaptadores futuros que consomem os mesmos contratos de `session/`.
 
 ## Funcionalidades
 
@@ -64,6 +50,23 @@ Linhas marcadas com ✗ são planejadas — o nome exato do comando pode mudar q
 | Export de histórico | Export das tentativas em CSV ou JSON para análise externa. | `aitken export` | ✗ |
 | Modo Textual (TUI) | Interface interativa em terminal com painel de stats ao vivo e heatmap de latência por par. | `aitken tui` | ✗ |
 | Major System | Apoio mnemônico (Major System) para memória de trabalho em 3d×3d e 4d×4d. | integrado ao `drill multidigit` | ✗ |
+
+
+## Arquitetura
+
+Quatro camadas com dependências em um único sentido:
+
+```
+ui/  →  session/  →  storage/
+                 ↘            ↘
+                   core/  ←───┘
+```
+
+- **`core/`** — lógica pura: geradores de problemas, scheduler SM-2, regras de progressão, estatísticas. Sem I/O, sem UI, sem SQLite.
+- **`storage/`** — adaptador SQLite. Depende apenas dos tipos de `core/`.
+- **`session/`** — casos de uso (DrillSession, DiagnosticSession). Orquestra `core/` + `storage/`. Hoje devolve resultados de forma síncrona; `session/events.py` fica reservado para uma API baseada em eventos que UIs assíncronas (Textual, GUI) consumirão sem tocar em `core/`.
+- **`ui/`** — `ui/plain.py` é o adaptador de terminal síncrono que hoje executa todas as sessões. `ui/textual/` e `ui/plot.py` são ganchos para adaptadores futuros que consomem os mesmos contratos de `session/`.
+
 
 ## Implementação detalhada
 
