@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "aitken"
-version = "0.0.0"
+version = "1.0.0"
 description = "Treinador CLI de aritmética mental com diagnóstico por latência e repetição espaçada."
 readme = "README.md"
 requires-python = ">=3.11"
