@@ -30,15 +30,20 @@ aitken drill factorial                           # fatoriais de 0! a 10! (faixa 
 
 ### Parâmetros comuns a todo drill
 
-Todos os subcomandos `aitken drill <módulo>` aceitam as mesmas três flags de sessão:
+Todos os subcomandos `aitken drill <módulo>` aceitam as mesmas flags de sessão:
 
 - `--count N` / `-n N` — número de problemas *distintos* a dominar (default 30; `factorial` usa 20 por ter pool menor).
-- `--db PATH` — arquivo SQLite do histórico (default em `$XDG_DATA_HOME/aitken/aitken.db`).
 - `--no-persist` — não grava tentativas nem o estado SM-2 desta sessão.
 
 Módulos com faixa ajustável (`tables`, `squares`, `cubes`) expõem também `--min`, `--max` e `--include-trivial`. `tables` ainda tem `--no-commutative`. `factorial` não tem flags adicionais: o pool é fixo de `0!` a `10!`. Rode `aitken drill <módulo> --help` para os detalhes.
 
-Outros módulos planejados (multidígito, atalhos), `aitken diagnostic` e `aitken export` estão listados em [Funcionalidades](#funcionalidades).
+### Onde fica o banco
+
+O histórico é gravado em `data/aitken.db`, dentro do próprio repositório. Como o projeto vive numa pasta sincronizada pelo OneDrive, o banco viaja entre máquinas sem precisar de export, env var ou config file — clonou a pasta, já tem o histórico.
+
+A flag `--db PATH` existe como escape hatch para apontar a sessão para um arquivo alternativo (usada principalmente pelos testes para isolar `tmp_path`).
+
+Outros módulos planejados (multidígito, atalhos) e `aitken diagnostic` estão listados em [Funcionalidades](#funcionalidades).
 
 
 ## Funcionalidades
@@ -56,11 +61,10 @@ Linhas marcadas com ✗ são planejadas — o nome exato do comando pode mudar q
 | Treino de quadrados | Sessão de `N²` para `N` em `[--min, --max]` (default 2–25). Aceita `--min`, `--max`, `--include-trivial`. | `aitken drill squares` | ✓ |
 | Treino de cubos | Sessão de `N³` para `N` em `[--min, --max]` (default 2–10). Aceita `--min`, `--max`, `--include-trivial`. | `aitken drill cubes` | ✓ |
 | Treino de fatoriais | Sessão de `N!` com `N` sorteado no pool fixo `{0, 1, ..., 10}` — sem parâmetros de faixa. | `aitken drill factorial` | ✓ |
-| Histórico persistente | Cada tentativa é gravada na tabela `attempts` e o estado SM-2 (`ease_factor`, streak de acertos) por chave em `schedule`. Banco em SQLite local (`~/.local/share/aitken/aitken.db` por padrão, respeitando `$XDG_DATA_HOME`). | automático em qualquer `drill` (desabilitável com `--no-persist`) | ✓ |
+| Histórico persistente | Cada tentativa é gravada na tabela `attempts` e o estado SM-2 (`ease_factor`, streak de acertos) por chave em `schedule`. Banco em SQLite dentro do projeto (`data/aitken.db`). Para análise ad-hoc, o banco é consultável direto com `sqlite3` ou qualquer ferramenta SQL. | automático em qualquer `drill` (desabilitável com `--no-persist`) | ✓ |
 | Treino multidígito | Multiplicações 2d×1d, 2d×2d, 3d×1d, 3d×2d, 3d×3d. | `aitken drill multidigit` | ✗ |
 | Treino de atalhos | Operações com atalhos mentais: ×11, ×25, ×125, (10a+5)². | `aitken drill tricks` | ✗ |
 | Diagnóstico de fraquezas | Bateria de 100 pares aleatórios; produz mapa dos pares mais lentos, estatísticas agregadas de latência (mediana, p90) e gráficos semanais de evolução (matplotlib). | `aitken diagnostic` | ✗ |
-| Export de histórico | Export das tentativas em CSV ou JSON para análise externa. | `aitken export` | ✗ |
 
 
 ## Arquitetura

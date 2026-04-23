@@ -54,8 +54,10 @@ Exemplos:
 
 Flags comuns a todo drill:
   --count/-n N   problemas distintos a dominar
-  --db PATH      caminho do banco SQLite
   --no-persist   não grava tentativas nem estado SM-2
+
+O banco padrão é data/aitken.db dentro do projeto. Use --db PATH para
+apontar para outro arquivo (escape hatch; útil para testes).
 
 Ajuda de cada módulo: aitken drill <módulo> --help
 """
@@ -68,7 +70,7 @@ Módulos:
   factorial   fatoriais (N!), pool fixo 0..10
 
 Cada módulo expõe --help com suas flags específicas, além das comuns
-(--count, --db, --no-persist).
+(--count, --no-persist, --db).
 """
 
 
@@ -131,7 +133,7 @@ def _add_common_drill_args(p: argparse.ArgumentParser, *, default_count: int = 3
         "--db",
         type=Path,
         default=DEFAULT_DB_PATH,
-        help=f"Arquivo SQLite do histórico (default: {DEFAULT_DB_PATH}).",
+        help="Banco alternativo; default é data/aitken.db na raiz do projeto.",
     )
     p.add_argument(
         "--no-persist",

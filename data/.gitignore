@@ -1,0 +1,5 @@
+# Esta pasta abriga o banco SQLite do usuário (aitken.db + WAL/SHM).
+# O conteúdo é ignorado; o próprio .gitignore é commitado só para
+# manter a pasta presente no repo.
+*
+!.gitignore

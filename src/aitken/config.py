@@ -3,28 +3,17 @@
 Separado de ``cli.py`` para que testes e outros entry points possam
 importar defaults sem depender do parser de argumentos.
 
-O caminho do banco segue a convenção XDG: ``$XDG_DATA_HOME/aitken/`` se
-a variável estiver definida, caso contrário ``~/.local/share/aitken/``.
-Isto é padrão em sistemas Linux e funciona em macOS sem surpresas. O
-usuário pode sempre sobrescrever via ``--db`` na linha de comando.
+O banco vive em ``<raiz_do_projeto>/data/aitken.db``. Decisão deliberada:
+o projeto é mantido em uma pasta sincronizada pelo OneDrive, então colocar
+o banco dentro do próprio repo resolve portabilidade entre máquinas sem
+precisar de env var, config file ou XDG. ``--db`` na CLI continua
+disponível como escape hatch (principalmente para testes, que apontam
+para um ``tmp_path``).
 """
 
-import os
 from pathlib import Path
 
+_REPO_ROOT = Path(__file__).resolve().parents[2]
 
-def default_data_dir() -> Path:
-    """Diretório de dados do usuário conforme XDG Base Directory Spec.
-
-    Returns:
-        Path para ``$XDG_DATA_HOME/aitken`` ou ``~/.local/share/aitken``.
-        O diretório *não* é criado aqui — ``open_db`` faz isso sob demanda.
-    """
-    xdg = os.environ.get("XDG_DATA_HOME")
-    if xdg:
-        return Path(xdg) / "aitken"
-    return Path.home() / ".local" / "share" / "aitken"
-
-
-DEFAULT_DB_PATH: Path = default_data_dir() / "aitken.db"
-"""Caminho padrão do banco SQLite do usuário."""
+DEFAULT_DB_PATH: Path = _REPO_ROOT / "data" / "aitken.db"
+"""Caminho padrão do banco SQLite (relativo à raiz do projeto)."""

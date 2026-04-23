@@ -69,9 +69,19 @@ Nenhuma importação em sentido contrário. Novo gerador entra como
 implementação do `Protocol` em `core/generators/base.py` + novo
 subparser em `cli.py` (via `_add_<module>_subparser`) + um
 `cmd_drill_<module>` que constrói o gerador e chama `_run_drill(args,
-gen)`. Flags comuns (`--count`, `--db`, `--no-persist`) vêm de
+gen)`. Flags comuns (`--count`, `--no-persist`, `--db`) vêm de
 `_add_common_drill_args`. Não toca `session/` nem `storage/`. Detalhes
 completos em `README.md`, seção "Implementação detalhada".
+
+## Localização do banco
+
+`DEFAULT_DB_PATH = <repo>/data/aitken.db` em `config.py`, calculado via
+`Path(__file__).resolve().parents[2]`. Decisão: projeto single-user, repo
+vive em pasta sincronizada pelo OneDrive — DB dentro do repo é o caminho
+portátil sem env var, config file ou XDG. `data/.gitignore` preserva a
+pasta no git e ignora os arquivos `.db*`. `--db` permanece na CLI como
+escape hatch, usado sobretudo pelos testes (que apontam para `tmp_path`
+do pytest para não poluir o banco real).
 
 ## Proibições
 
