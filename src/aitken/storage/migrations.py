@@ -5,9 +5,11 @@ migração aplicada) para permitir upgrades incrementais sem perder dados.
 Cada migração é idempotente: rodar a função ``migrate`` em um banco já
 atualizado não faz nada.
 
-Schema atual (v1):
-    attempts — histórico de tentativas, fonte de verdade para stats,
-               scheduler SM-2 futuro e heatmap de fraquezas.
+Schema atual (v2):
+    attempts — histórico de tentativas, fonte de verdade para stats e
+               heatmap de fraquezas.
+    schedule — estado SM-2 por ``(module_id, problem_key)``: fator de
+               facilidade e streak de acertos. Persistido entre sessões.
 """
 
 import sqlite3
@@ -39,6 +41,17 @@ CREATE INDEX IF NOT EXISTS idx_attempts_created
     ON attempts(created_at);
 """
 
+_MIGRATION_V2 = """
+CREATE TABLE IF NOT EXISTS schedule (
+    module_id            TEXT    NOT NULL,
+    problem_key          TEXT    NOT NULL,
+    ease_factor          REAL    NOT NULL CHECK (ease_factor >= 1.3),
+    consecutive_correct  INTEGER NOT NULL CHECK (consecutive_correct >= 0),
+    updated_at           TEXT    NOT NULL,
+    PRIMARY KEY (module_id, problem_key)
+);
+"""
+
 
 def migrate(conn: sqlite3.Connection) -> None:
     """Aplica todas as migrações pendentes.
@@ -66,4 +79,5 @@ def migrate(conn: sqlite3.Connection) -> None:
 
 _MIGRATIONS: list[tuple[int, str]] = [
     (1, _MIGRATION_V1),
+    (2, _MIGRATION_V2),
 ]

@@ -1,12 +1,13 @@
-"""Testes de :class:`AttemptRepo` e do pipeline de migração."""
+"""Testes de :class:`AttemptRepo`, :class:`ScheduleRepo` e do pipeline de migração."""
 
 from pathlib import Path
 
 import pytest
 
 from aitken.core.problem import Attempt, Problem
+from aitken.core.scheduler import Card
 from aitken.storage.db import open_db
-from aitken.storage.repositories import AttemptRepo
+from aitken.storage.repositories import AttemptRepo, ScheduleRepo
 
 
 @pytest.fixture
@@ -84,7 +85,7 @@ def test_migrations_idempotent(tmp_path: Path) -> None:
     conn1.close()
     conn2 = open_db(db_path)
     row = conn2.execute("SELECT MAX(version) AS v FROM schema_version").fetchone()
-    assert row["v"] == 1
+    assert row["v"] == 2
     conn2.close()
 
 
@@ -108,3 +109,36 @@ def test_stored_columns_preserve_values(repo: AttemptRepo) -> None:
     assert row["correct"] == 1
     assert row["elapsed_ms"] == 1234
     assert row["created_at"]  # timestamp não-vazio
+
+
+@pytest.fixture
+def schedule(tmp_path: Path) -> ScheduleRepo:
+    conn = open_db(tmp_path / "sched.db")
+    return ScheduleRepo(conn)
+
+
+def test_schedule_load_empty(schedule: ScheduleRepo) -> None:
+    assert schedule.load("tables") == {}
+
+
+def test_schedule_upsert_roundtrip(schedule: ScheduleRepo) -> None:
+    schedule.upsert("tables", "tables:7x8", Card(ease_factor=2.3, consecutive_correct=2))
+    loaded = schedule.load("tables")
+    assert loaded["tables:7x8"].ease_factor == pytest.approx(2.3)
+    assert loaded["tables:7x8"].consecutive_correct == 2
+
+
+def test_schedule_upsert_overwrites(schedule: ScheduleRepo) -> None:
+    schedule.upsert("tables", "tables:7x8", Card(ease_factor=2.5, consecutive_correct=1))
+    schedule.upsert("tables", "tables:7x8", Card(ease_factor=2.1, consecutive_correct=0))
+    loaded = schedule.load("tables")
+    assert loaded["tables:7x8"].ease_factor == pytest.approx(2.1)
+    assert loaded["tables:7x8"].consecutive_correct == 0
+
+
+def test_schedule_isolates_modules(schedule: ScheduleRepo) -> None:
+    schedule.upsert("tables", "tables:7x8", Card())
+    schedule.upsert("squares", "squares:12", Card(ease_factor=1.7))
+    assert "tables:7x8" in schedule.load("tables")
+    assert "tables:7x8" not in schedule.load("squares")
+    assert "squares:12" in schedule.load("squares")

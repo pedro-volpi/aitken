@@ -1,15 +1,15 @@
 """Testes da CLI: parser e integração ``main()`` ↔ filesystem."""
 
+import re
 import sqlite3
 from pathlib import Path
-from random import Random
 from unittest.mock import patch
 
 import pytest
 
 from aitken.cli import build_parser, main
-from aitken.core.generators.tables import TablesGenerator, TablesParams
-from aitken.session.drill import DrillSession
+
+_PROMPT_RE = re.compile(r"(\d+)\s*×\s*(\d+)")
 
 
 def test_parser_requires_command() -> None:
@@ -65,20 +65,13 @@ def test_parser_tables_overrides() -> None:
 
 
 def test_main_runs_drill_tables(tmp_path: Path) -> None:
-    """Smoke test: a CLI completa com respostas piped termina com rc=0 e grava."""
+    """Smoke test: a CLI completa com respostas auto-corretas termina em rc=0 e grava."""
     db_path = tmp_path / "cli.db"
 
-    # Com seed fixo, reproduzimos a mesma sequência que a CLI vai gerar.
-    preview = DrillSession(
-        generator=TablesGenerator(TablesParams()),
-        repo=None,
-        max_problems=3,
-        rng=Random(42),
-    )
-    answers_iter = iter([p.expected_answer for p in preview])
-
     def fake_input(prompt: str = "") -> str:
-        return next(answers_iter)
+        match = _PROMPT_RE.search(prompt)
+        assert match is not None
+        return str(int(match.group(1)) * int(match.group(2)))
 
     argv = [
         "drill",
@@ -95,11 +88,13 @@ def test_main_runs_drill_tables(tmp_path: Path) -> None:
         rc = main(argv)
 
     assert rc == 0
-    # Banco foi criado e gravou as 3 tentativas.
+    # Banco foi criado e gravou as 3 tentativas + pelo menos 1 Card SM-2.
     conn = sqlite3.connect(str(db_path))
     try:
-        row = conn.execute("SELECT COUNT(*) FROM attempts").fetchone()
-        assert row[0] == 3
+        attempts = conn.execute("SELECT COUNT(*) FROM attempts").fetchone()
+        schedule = conn.execute("SELECT COUNT(*) FROM schedule").fetchone()
+        assert attempts[0] == 3
+        assert schedule[0] >= 1
     finally:
         conn.close()
 

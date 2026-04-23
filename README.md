@@ -35,23 +35,20 @@ Outros módulos de drill (quadrados, multidígito, atalhos), `aitken diagnostic`
 
 Linhas marcadas com ✗ são planejadas — o nome exato do comando pode mudar quando forem implementadas.
 
-> **Política padrão de todo drill: retry-on-wrong.** Toda sessão de treino reapresenta o mesmo problema sempre que a resposta estiver errada, até ele ser respondido corretamente. `--count N` conta *problemas distintos a dominar*; tentativas erradas não consomem desse orçamento. A resposta certa nunca é exibida em caso de erro — revelá-la esvaziaria o retry.
+> **Políticas padrão de todo drill.**
+>
+> - *Retry-on-wrong*: respostas erradas reapresentam o mesmo problema até serem acertadas. `--count N` conta problemas distintos a dominar; tentativas erradas não consomem desse orçamento. A resposta certa nunca é exibida no erro — revelá-la esvaziaria o retry.
+> - *SM-2 ponderado por latência*: a amostragem prioriza pares com `ease_factor` baixo (difíceis, lentos ou recém-errados) sobre pares já dominados. Ao fim de cada ciclo de retry o `Card` da chave é atualizado; erros em qualquer ponto do ciclo rebaixam o item para "re-aprender" (quality ≤ 2 → streak zera, `ease_factor` cai 0.2). Pares nunca vistos têm prioridade máxima, para que a sessão cubra o universo antes de voltar aos conhecidos.
 
 | Funcionalidade | Descrição | Como chamar | Implementado |
 | --- | --- | --- | --- |
-| Treino de tabuada | Sessão cronometrada de multiplicações na faixa configurada (padrão 2-9, estensível até qualquer inteiro). Respostas erradas são reapresentadas até o usuário acertar (retry-on-wrong). Imprime feedback por tentativa e resumo de acertos + latência ao final. Aceita `--count`, `--min`, `--max`, `--seed`, `--include-trivial`, `--no-persist`. | `aitken drill tables` | ✓ |
-| Histórico persistente | Cada tentativa é gravada em SQLite local (`~/.local/share/aitken/aitken.db` por padrão, respeitando `$XDG_DATA_HOME`). Base para as estatísticas e progressão futuras. | automático em qualquer `drill` (desabilitável com `--no-persist`) | ✓ |
+| Treino de tabuada | Sessão cronometrada de multiplicações na faixa configurada (padrão 2-9, estensível até qualquer inteiro). Amostragem por SM-2 + retry-on-wrong. Imprime feedback por tentativa e resumo de acertos + latência ao final. Aceita `--count`, `--min`, `--max`, `--seed`, `--include-trivial`, `--no-persist`. | `aitken drill tables` | ✓ |
+| Histórico persistente | Cada tentativa é gravada na tabela `attempts` e o estado SM-2 (`ease_factor`, streak de acertos) por chave é gravado em `schedule`. Banco em SQLite local (`~/.local/share/aitken/aitken.db` por padrão, respeitando `$XDG_DATA_HOME`). | automático em qualquer `drill` (desabilitável com `--no-persist`) | ✓ |
 | Treino de quadrados | Sessão cronometrada de quadrados até 25². | `aitken drill squares` | ✗ |
 | Treino multidígito | Multiplicações 2d×1d, 2d×2d, 3d×1d, 3d×2d, 3d×3d. | `aitken drill multidigit` | ✗ |
 | Treino de atalhos | Operações com atalhos mentais: ×11, ×25, ×125, (10a+5)². | `aitken drill tricks` | ✗ |
-| Diagnóstico de fraquezas | 100 pares aleatórios com mapa dos pares mais lentos, para priorizar estudo. | `aitken diagnostic` | ✗ |
-| Estatísticas agregadas | Latência mediana e p90 por nível ao longo de todo o histórico. | `aitken stats` | ✗ |
-| Gráficos de evolução | Gráficos semanais de acerto e latência gerados via matplotlib. | `aitken plot` | ✗ |
-| Repetição espaçada (SM-2) | Amostragem ponderada por latência que prioriza pares lentos em vez de sortear uniformemente. | automático em `drill` | ✗ |
-| Progressão automática de níveis | Desbloqueio do próximo nível (ex.: 2d×2d após tabuada) quando a latência mediana cai abaixo do limiar configurado. | automático | ✗ |
+| Diagnóstico de fraquezas | Bateria de 100 pares aleatórios; produz mapa dos pares mais lentos, estatísticas agregadas de latência (mediana, p90) e gráficos semanais de evolução (matplotlib). | `aitken diagnostic` | ✗ |
 | Export de histórico | Export das tentativas em CSV ou JSON para análise externa. | `aitken export` | ✗ |
-| Modo Textual (TUI) | Interface interativa em terminal com painel de stats ao vivo e heatmap de latência por par. | `aitken tui` | ✗ |
-| Major System | Apoio mnemônico (Major System) para memória de trabalho em 3d×3d e 4d×4d. | integrado ao `drill multidigit` | ✗ |
 
 
 ## Arquitetura
@@ -64,7 +61,7 @@ ui/  →  session/  →  storage/
                    core/  ←───┘
 ```
 
-- **`core/`** — lógica pura: geradores de problemas, scheduler SM-2, regras de progressão, estatísticas. Sem I/O, sem UI, sem SQLite.
+- **`core/`** — lógica pura: geradores de problemas, scheduler SM-2 (`ease_factor`, streak, quality mapping), estatísticas. Sem I/O, sem UI, sem SQLite. `core/progression.py` está reservado para regras futuras de desbloqueio de nível.
 - **`storage/`** — adaptador SQLite. Depende apenas dos tipos de `core/`.
 - **`session/`** — casos de uso (DrillSession, DiagnosticSession). Orquestra `core/` + `storage/`. Hoje devolve resultados de forma síncrona; `session/events.py` fica reservado para uma API baseada em eventos que UIs assíncronas (Textual, GUI) consumirão sem tocar em `core/`.
 - **`ui/`** — `ui/plain.py` é o adaptador de terminal síncrono que hoje executa todas as sessões. `ui/textual/` e `ui/plot.py` são ganchos para adaptadores futuros que consomem os mesmos contratos de `session/`.
@@ -86,12 +83,13 @@ A camada **`ui/`** é o único lugar onde existem `input()`, `print()` e `time.p
 
 ### Tipos de domínio
 
-Quatro dataclasses formam o vocabulário compartilhado entre as camadas:
+Cinco dataclasses formam o vocabulário compartilhado entre as camadas:
 
 - **`Problem`** (`src/aitken/core/problem.py`) — `module_id`, `key` canônica (ex.: `tables:7x8` agrupa estatisticamente 7×8 e 8×7 quando `commutative_pairs=True`), `prompt` legível, `expected_answer` em string.
-- **`Attempt`** (`src/aitken/core/problem.py`) — `problem`, `user_answer`, `correct`, `elapsed_ms`. É o que entra no banco.
+- **`Attempt`** (`src/aitken/core/problem.py`) — `problem`, `user_answer`, `correct`, `elapsed_ms`. É o que entra na tabela `attempts`.
 - **`TablesParams`** (`src/aitken/core/generators/tables.py`) — `frozen=True` com `__post_init__` validando faixas. Frozen porque parâmetros circulam entre threads e módulos; mutação silenciosa nunca é o que o usuário quer.
 - **`SessionSummary`** (`src/aitken/core/stats.py`) — `total`, `correct`, `accuracy`, `median_ms`, `p90_ms` (ou `None` se `total < 10`), `slowest`.
+- **`Card`** (`src/aitken/core/scheduler.py`) — estado SM-2 por chave: `ease_factor` (partida em 2.5, piso em 1.3) e `consecutive_correct`. Persistido na tabela `schedule`.
 
 ### Cadeia de execução de um comando
 
@@ -112,18 +110,18 @@ aitken drill tables --count 30 --seed 42
 
 5. `cmd_drill_tables` instancia `TablesParams(min_factor=2, max_factor=9, commutative_pairs=True, exclude_trivial=True)`. O `__post_init__` rejeita `min_factor < 0`, `min_factor > max_factor` e faixas que ficam vazias após `exclude_trivial`. Com os params válidos, constrói `TablesGenerator(params)` e `Random(args.seed)` — o seed fixo é o que dá reprodutibilidade.
 6. Como `--no-persist` não foi passado, chama `open_db(args.db)`. A função cria o diretório pai se necessário, abre a conexão em autocommit e aplica três pragmas: `journal_mode=WAL` (leituras concorrentes não bloqueiam escritas), `foreign_keys=ON` (SQLite desabilita por padrão), `synchronous=NORMAL` (perdemos só a última transação em crash do SO, não do processo). Em seguida chama `migrate(conn)`, que lê a tabela `schema_version`, aplica só as migrações pendentes e é idempotente — rodar duas vezes é no-op.
-7. `AttemptRepo(conn)` embrulha a conexão (stateless além disso). `DrillSession(generator, repo, max_problems=30, rng)` valida `max_problems > 0` e guarda as quatro referências injetadas.
+7. `AttemptRepo(conn)` e `ScheduleRepo(conn)` embrulham a conexão (stateless além dela). `DrillSession(generator, attempt_repo, schedule_repo, max_problems=30, rng)` valida `max_problems > 0`, guarda as cinco referências injetadas e chama `schedule_repo.load("tables")` para hidratar o dicionário interno de `Card` com o que já existia no banco — assim uma sessão nova retoma exatamente onde a anterior parou.
 
 **Loop de iteração (`ui/` ↔ `session/` ↔ `core/`)**
 
 8. `cmd_drill_tables` delega para `plain.run(session)`.
-9. `plain.run` itera `for problem in session:`, lendo a posição atual via `session.current_position`. Isso dispara `DrillSession.__iter__`, que — se `self._pending_retry` estiver setado — reemite o mesmo problema sem decrementar `self._remaining`; caso contrário decrementa, incrementa `_position` e faz `yield self._generator.next(self._rng)`. O loop segue enquanto restar problema distinto a gerar **ou** um retry pendente.
-10. `TablesGenerator.next(rng)` chama `_draw(rng)` em um laço de amostragem por rejeição (descarta pares com fator `< 2` quando `exclude_trivial=True`), calcula a `key` canônica (`min(a,b), max(a,b)` quando `commutative_pairs=True`) e devolve um `Problem` com `prompt = "a × b"` e `expected_answer = str(a*b)`.
+9. `plain.run` itera `for problem in session:`, lendo a posição atual via `session.current_position`. Isso dispara `DrillSession.__iter__`, que — se `self._pending_retry` estiver setado — reemite o mesmo problema sem decrementar `self._remaining` (retry-on-wrong); caso contrário decrementa, incrementa `_position` e faz `yield self._generator.next(self._rng, weights=weights_from_cards(self._cards))`. Os pesos vêm do scheduler SM-2: cada chave conhecida produz um peso a partir do seu `Card` (baixo `ease_factor` → peso alto), e chaves inéditas recebem o peso padrão de `sampling_weight(None)` — o maior. O loop segue enquanto restar problema distinto a dominar **ou** um retry pendente.
+10. `TablesGenerator.next(rng, weights=...)` faz `rng.choices(all_keys, weights=ws, k=1)` para escolher a chave a renderizar, devolve um `Problem` com `prompt = "a × b"` (em pares comutativos, aleatoriza a ordem só na apresentação — a `key` canônica continua `min(a,b), max(a,b)`) e `expected_answer = str(a*b)`. Sem `weights`, recai no caminho uniforme via `_draw` (amostragem por rejeição para descartar pares com fator `< 2` quando `exclude_trivial=True`).
 
 **Loop de captura (`ui/` ↔ `session/`)**
 
 11. De volta ao `plain.run`: `start = time.perf_counter()` (monotônico, imune a ajustes de relógio), `answer = ask(prompt)` (onde `ask` é o `input_fn` injetado ou `builtins.input`), `elapsed_ms = int((time.perf_counter() - start) * 1000)`. Um `EOFError`/`KeyboardInterrupt` quebra o loop graciosamente — o resumo ainda é gerado com os `attempts` que chegaram até ali.
-12. `session.record(problem, answer, elapsed_ms)` valida `elapsed_ms >= 0`, chama `generator.check(problem, user_answer)` (`TablesGenerator.check` faz `strip()`, tenta `int()`, compara — nunca levanta), constrói o `Attempt` e apenda. Se `self._repo is not None`, chama `repo.record(attempt)` — o `INSERT` inclui `created_at = datetime.now(UTC).isoformat(timespec="milliseconds")`. Ao final, `self._pending_retry = None if correct else problem` — é essa atribuição que implementa o retry-on-wrong: na próxima iteração, `__iter__` vê o campo preenchido e reemite o mesmo `Problem`.
+12. `session.record(problem, answer, elapsed_ms)` valida `elapsed_ms >= 0`, chama `generator.check(problem, user_answer)` (`TablesGenerator.check` faz `strip()`, tenta `int()`, compara — nunca levanta), constrói o `Attempt` e apenda. Se `self._attempt_repo is not None`, chama `attempt_repo.record(attempt)` — o `INSERT` inclui `created_at = datetime.now(UTC).isoformat(timespec="milliseconds")`. Em seguida, o fluxo ramifica: **se a resposta estiver errada**, `self._pending_retry = problem` e `self._cycle_had_error = True` — o ciclo segue aberto; **se correta**, fecha o ciclo: computa `quality = quality_from_attempt(correct=True, elapsed_ms=elapsed_ms)` (5 se rápido, 2 se muito lento), reduz a `min(quality, 2)` se houve erro em algum ponto do ciclo, chama `update_card` no `Card` da chave e, se `self._schedule_repo is not None`, persiste via `schedule_repo.upsert(...)`.
 13. `plain.run` formata o retorno via `_format_feedback(attempt)` (`ok (Xs)` no acerto, `x errado (sua: 'Z', Xs)` no erro — a resposta certa **não** é revelada, porque o problema volta logo em seguida) e escreve no `output`.
 
 **Encerramento**
@@ -162,18 +160,23 @@ digraph aitken_call_chain {
 
   subgraph cluster_core {
     label="core/"; style=filled; fillcolor="#fff7e8";
-    gen_next   [label="TablesGenerator.next"];
-    gen_draw   [label="TablesGenerator._draw"];
-    gen_check  [label="TablesGenerator.check"];
-    stats_sum  [label="stats.summarize"];
-    params     [label="TablesParams.__post_init__", shape=note];
+    gen_next       [label="TablesGenerator.next"];
+    gen_draw       [label="TablesGenerator._draw"];
+    gen_check      [label="TablesGenerator.check"];
+    stats_sum      [label="stats.summarize"];
+    params         [label="TablesParams.__post_init__", shape=note];
+    sched_weights  [label="scheduler.weights_from_cards"];
+    sched_quality  [label="scheduler.quality_from_attempt"];
+    sched_update   [label="scheduler.update_card"];
   }
 
   subgraph cluster_storage {
     label="storage/"; style=filled; fillcolor="#fdf0ff";
-    open_db  [label="db.open_db"];
-    migrate  [label="migrations.migrate"];
-    repo_rec [label="AttemptRepo.record"];
+    open_db       [label="db.open_db"];
+    migrate       [label="migrations.migrate"];
+    attempt_rec   [label="AttemptRepo.record"];
+    sched_load    [label="ScheduleRepo.load"];
+    sched_upsert  [label="ScheduleRepo.upsert"];
   }
 
   entry          -> cli_main;
@@ -183,22 +186,27 @@ digraph aitken_call_chain {
   cli_cmd_tables -> open_db;
   open_db        -> migrate;
   cli_cmd_tables -> drill_init;
+  drill_init     -> sched_load;
   cli_cmd_tables -> plain_run;
 
   plain_run      -> drill_iter;
-  drill_iter     -> gen_next;
-  gen_next       -> gen_draw        [label="loop rejeição"];
+  drill_iter     -> sched_weights;
+  drill_iter     -> gen_next        [label="weights=..."];
+  gen_next       -> gen_draw        [label="caminho uniforme"];
 
   plain_run      -> drill_record;
   drill_record   -> gen_check;
-  drill_record   -> repo_rec        [label="se repo != None"];
+  drill_record   -> attempt_rec     [label="se attempt_repo"];
+  drill_record   -> sched_quality   [label="no acerto final"];
+  drill_record   -> sched_update;
+  drill_record   -> sched_upsert    [label="se schedule_repo"];
 
   plain_run      -> drill_sum;
   drill_sum      -> stats_sum;
   plain_run      -> plain_fmt       [style=dotted];
 
   gen_next       -> drill_iter      [label="Problem",        style=dashed, constraint=false];
-  drill_record   -> repo_rec        [label="Attempt",        style=dashed, constraint=false];
+  drill_record   -> attempt_rec     [label="Attempt",        style=dashed, constraint=false];
   stats_sum      -> drill_sum       [label="SessionSummary", style=dashed, constraint=false];
 }
 ```
@@ -215,10 +223,10 @@ A assinatura é `plain.run(session, *, output: TextIO | None = None, input_fn: C
 
 ### Adicionando um novo gerador
 
-- Implementar o `Protocol` `Generator` em `src/aitken/core/generators/base.py`: atributo `module_id: str`, método `next(rng: Random) -> Problem`, método `check(problem: Problem, user_answer: str) -> bool`. Nenhuma herança, só satisfazer o contrato.
+- Implementar o `Protocol` `Generator` em `src/aitken/core/generators/base.py`: atributo `module_id: str`, método `next(rng: Random, *, weights: Mapping[str, float] | None = None) -> Problem`, método `all_keys() -> Sequence[str]`, método `check(problem: Problem, user_answer: str) -> bool`. Quando `weights` é passado, o gerador amostra ponderadamente por chave (integração com SM-2); sem pesos, amostragem uniforme.
 - Opcional: um dataclass `frozen=True` de parâmetros com `__post_init__` validador, seguindo `TablesParams`.
-- Em `cli.py`, espelhar `_add_tables_subparser` e escrever um `cmd_*` análogo a `cmd_drill_tables`. Os arquivos de outras camadas não mudam.
-- `core/progression.py` e `core/scheduler.py` hoje são stubs — eles abrigam, respectivamente, as regras de desbloqueio por nível e o agendador SM-2 ponderado por latência descritos na Motivação.
+- Em `cli.py`, espelhar `_add_tables_subparser` e escrever um `cmd_*` análogo a `cmd_drill_tables`. Os arquivos de outras camadas não mudam — a `DrillSession` já carrega o estado SM-2 correto para o novo módulo via `schedule_repo.load(generator.module_id)`.
+- `core/progression.py` hoje é stub — reservado para regras de desbloqueio automático de nível (liberar 2d×2d quando a tabuada ficar rápida).
 
 ## Desenvolvimento
 

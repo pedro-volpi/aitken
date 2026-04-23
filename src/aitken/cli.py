@@ -25,7 +25,7 @@ from aitken.config import DEFAULT_DB_PATH
 from aitken.core.generators.tables import TablesGenerator, TablesParams
 from aitken.session.drill import DrillSession
 from aitken.storage.db import open_db
-from aitken.storage.repositories import AttemptRepo
+from aitken.storage.repositories import AttemptRepo, ScheduleRepo
 from aitken.ui import plain
 
 
@@ -135,15 +135,18 @@ def cmd_drill_tables(args: argparse.Namespace) -> int:
     generator = TablesGenerator(params)
     rng = Random(args.seed)
 
-    repo: AttemptRepo | None = None
+    attempt_repo: AttemptRepo | None = None
+    schedule_repo: ScheduleRepo | None = None
     conn: sqlite3.Connection | None = None
     try:
         if not args.no_persist:
             conn = open_db(args.db)
-            repo = AttemptRepo(conn)
+            attempt_repo = AttemptRepo(conn)
+            schedule_repo = ScheduleRepo(conn)
         session = DrillSession(
             generator=generator,
-            repo=repo,
+            attempt_repo=attempt_repo,
+            schedule_repo=schedule_repo,
             max_problems=args.count,
             rng=rng,
         )

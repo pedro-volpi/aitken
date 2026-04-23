@@ -1,4 +1,4 @@
-"""Testes de :class:`DrillSession` — orquestração e persistência."""
+"""Testes de :class:`DrillSession` — orquestração, retry e SM-2."""
 
 from pathlib import Path
 from random import Random
@@ -8,18 +8,20 @@ import pytest
 from aitken.core.generators.tables import TablesGenerator, TablesParams
 from aitken.session.drill import DrillSession
 from aitken.storage.db import open_db
-from aitken.storage.repositories import AttemptRepo
+from aitken.storage.repositories import AttemptRepo, ScheduleRepo
 
 
 def _session(
     *,
-    repo: AttemptRepo | None = None,
+    attempt_repo: AttemptRepo | None = None,
+    schedule_repo: ScheduleRepo | None = None,
     count: int = 5,
     seed: int = 0,
 ) -> DrillSession:
     return DrillSession(
         generator=TablesGenerator(TablesParams()),
-        repo=repo,
+        attempt_repo=attempt_repo,
+        schedule_repo=schedule_repo,
         max_problems=count,
         rng=Random(seed),
     )
@@ -67,7 +69,7 @@ def test_record_persists_to_repo(tmp_path: Path) -> None:
     conn = open_db(tmp_path / "t.db")
     try:
         repo = AttemptRepo(conn)
-        session = _session(repo=repo, count=3)
+        session = _session(attempt_repo=repo, count=3)
         for problem in session:
             session.record(problem, problem.expected_answer, elapsed_ms=500)
         assert repo.count() == 3
@@ -77,7 +79,7 @@ def test_record_persists_to_repo(tmp_path: Path) -> None:
 
 
 def test_record_skips_persist_when_repo_none() -> None:
-    session = _session(repo=None, count=3)
+    session = _session(attempt_repo=None, count=3)
     for problem in session:
         session.record(problem, problem.expected_answer, elapsed_ms=500)
     # Sem exceção e sessão tem as 3 tentativas em memória.
@@ -95,14 +97,16 @@ def test_invalid_max_problems() -> None:
     with pytest.raises(ValueError):
         DrillSession(
             generator=TablesGenerator(TablesParams()),
-            repo=None,
+            attempt_repo=None,
+            schedule_repo=None,
             max_problems=0,
             rng=Random(),
         )
     with pytest.raises(ValueError):
         DrillSession(
             generator=TablesGenerator(TablesParams()),
-            repo=None,
+            attempt_repo=None,
+            schedule_repo=None,
             max_problems=-3,
             rng=Random(),
         )
@@ -186,10 +190,12 @@ def test_end_to_end_with_storage(tmp_path: Path) -> None:
     """Run completo: cria banco, roda sessão pequena, verifica stats e contagem."""
     conn = open_db(tmp_path / "e2e.db")
     try:
-        repo = AttemptRepo(conn)
+        attempt_repo = AttemptRepo(conn)
+        schedule_repo = ScheduleRepo(conn)
         session = DrillSession(
             generator=TablesGenerator(TablesParams()),
-            repo=repo,
+            attempt_repo=attempt_repo,
+            schedule_repo=schedule_repo,
             max_problems=5,
             rng=Random(1),
         )
@@ -199,6 +205,65 @@ def test_end_to_end_with_storage(tmp_path: Path) -> None:
         assert summary.total == 5
         assert summary.correct == 5
         assert summary.accuracy == 1.0
-        assert repo.count() == 5
+        assert attempt_repo.count() == 5
+        # Cada chave correta deve ter Card persistido.
+        loaded = schedule_repo.load("tables")
+        assert len(loaded) >= 1
+    finally:
+        conn.close()
+
+
+def test_sm2_updates_card_on_correct() -> None:
+    """Resposta correta rápida atualiza Card: streak sobe, EF sobe ou mantém."""
+    session = _session(count=1)
+    problem = next(iter(session))
+    session.record(problem, problem.expected_answer, elapsed_ms=500)  # quality 5
+    card = session.card_for(problem.key)
+    assert card is not None
+    assert card.consecutive_correct == 1
+    assert card.ease_factor >= 2.5
+
+
+def test_sm2_penalizes_after_error_in_cycle() -> None:
+    """Erro no ciclo cobra quality <= 2 ao acerto final → zera streak, EF cai."""
+    session = _session(count=1)
+    problem = next(iter(session))
+    session.record(problem, "wrong", elapsed_ms=500)  # erro, ciclo ainda aberto
+    retry = next(iter(session))
+    assert retry == problem
+    session.record(retry, retry.expected_answer, elapsed_ms=500)  # fecha o ciclo
+    card = session.card_for(problem.key)
+    assert card is not None
+    # quality foi truncada em 2 → path de recall failure → streak = 0
+    assert card.consecutive_correct == 0
+    assert card.ease_factor < 2.5  # caiu ao menos 0.2
+
+
+def test_schedule_repo_persists_across_sessions(tmp_path: Path) -> None:
+    """Card gravado em uma sessão reaparece em outra sobre o mesmo banco."""
+    conn = open_db(tmp_path / "persist.db")
+    try:
+        sched = ScheduleRepo(conn)
+        s1 = DrillSession(
+            generator=TablesGenerator(TablesParams()),
+            attempt_repo=None,
+            schedule_repo=sched,
+            max_problems=1,
+            rng=Random(0),
+        )
+        p = next(iter(s1))
+        s1.record(p, p.expected_answer, elapsed_ms=500)
+        assert sched.load("tables")[p.key].consecutive_correct == 1
+
+        # Sessão nova sobre o mesmo banco carrega o Card anterior.
+        s2 = DrillSession(
+            generator=TablesGenerator(TablesParams()),
+            attempt_repo=None,
+            schedule_repo=sched,
+            max_problems=1,
+            rng=Random(0),
+        )
+        assert s2.card_for(p.key) is not None
+        assert s2.card_for(p.key).consecutive_correct == 1  # type: ignore[union-attr]
     finally:
         conn.close()
