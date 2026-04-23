@@ -35,7 +35,18 @@ Todos os subcomandos `aitken drill <módulo>` aceitam as mesmas flags de sessão
 - `--count N` / `-n N` — número de problemas *distintos* a dominar (default 30; `factorial` usa 20 por ter pool menor).
 - `--no-persist` — não grava tentativas nem o estado SM-2 desta sessão.
 
-Módulos com faixa ajustável (`tables`, `squares`, `cubes`) expõem também `--min`, `--max` e `--include-trivial`. `tables` ainda tem `--no-commutative`. `factorial` não tem flags adicionais: o pool é fixo de `0!` a `10!`. Rode `aitken drill <módulo> --help` para os detalhes.
+### Flags específicas dos módulos
+
+Além dos parâmetros comuns, `tables`, `squares` e `cubes` expõem flags próprias para ajustar a faixa amostrada e os filtros. `factorial` não tem flags adicionais — o pool é fixo de `0!` a `10!`.
+
+| Flag | Módulos | Default | Efeito |
+| --- | --- | --- | --- |
+| `--min N` | `tables`, `squares`, `cubes` | `tables`: 2 · `squares`: 11 · `cubes`: 3 | Menor valor da faixa amostrada — fator na tabuada; base em quadrados e cubos. |
+| `--max N` | `tables`, `squares`, `cubes` | `tables`: 9 · `squares`: 25 · `cubes`: 10 | Maior valor da faixa amostrada. |
+| `--include-trivial` | `tables`, `squares`, `cubes` | exclui triviais | Passar a flag mantém os casos triviais no pool: `×0`/`×1` na tabuada, `0²`/`1²` em quadrados, `0³`/`1³` em cubos. Por default ficam fora porque não exercitam cálculo mental — sabê-los ≠ treiná-los. |
+| `--no-commutative` | `tables` | agrupa comutativos | Por default, `7×8` e `8×7` compartilham a chave SM-2 canônica `tables:7x8`, o que significa **mesmo `Card`, mesmo estado de aprendizado** — acertar um conta como reforço do outro. Passar a flag separa em duas chaves distintas (`tables:7x8` e `tables:8x7`) e faz o SM-2 tratá-los como itens independentes. Útil apenas se você considera que a ordem de apresentação altera a dificuldade cognitiva e quer medir cada lado em separado. |
+
+Cada flag também aparece em `aitken drill <módulo> --help` com a mesma descrição resumida.
 
 ### Onde fica o banco
 
