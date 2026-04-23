@@ -5,7 +5,6 @@ um buffer ``io.StringIO`` como ``output`` para capturar o que seria
 impresso. Isso valida o contrato ``ui.plain.run`` ↔ ``DrillSession`` sem
 precisar de terminal.
 """
-from __future__ import annotations
 
 import io
 from pathlib import Path
@@ -107,7 +106,7 @@ def test_run_mixed_results() -> None:
     assert summary.wrong == 1
     text = buf.getvalue()
     assert "correta:" in text  # feedback de erro
-    assert "ok" in text        # feedback de acerto
+    assert "ok" in text  # feedback de acerto
 
 
 def test_run_handles_abort() -> None:

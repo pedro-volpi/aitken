@@ -15,21 +15,25 @@ efetiva é dominada pelo tempo de digitação e pelo newline do terminal,
 da ordem de 50–100 ms. Para drills cuja latência alvo é ≥ 1 s (toda a
 tabuada), essa margem é irrelevante.
 """
-from __future__ import annotations
 
+import builtins
+import sys
 import time
+from collections.abc import Callable
 from typing import TextIO
 
 from aitken.core.problem import Attempt
 from aitken.core.stats import SessionSummary
 from aitken.session.drill import DrillSession
 
+InputFn = Callable[[str], str]
+
 
 def run(
     session: DrillSession,
     *,
     output: TextIO | None = None,
-    input_fn: object = None,
+    input_fn: InputFn | None = None,
 ) -> SessionSummary:
     """Executa uma sessão inteira com I/O em texto e devolve o resumo.
 
@@ -47,11 +51,8 @@ def run(
         ``Ctrl-C``/``Ctrl-D`` no meio — o resumo cobre apenas o que foi
         efetivamente respondido).
     """
-    import builtins
-    import sys
-
     out = output if output is not None else sys.stdout
-    ask = input_fn if input_fn is not None else builtins.input
+    ask: InputFn = input_fn if input_fn is not None else builtins.input
 
     def _print(line: str = "") -> None:
         out.write(line + "\n")
@@ -65,8 +66,8 @@ def run(
         prompt = f"[{i}/{total}]  {problem.prompt} = "
         start = time.perf_counter()
         try:
-            answer = ask(prompt)  # type: ignore[operator]
-        except (EOFError, KeyboardInterrupt):
+            answer = ask(prompt)
+        except EOFError, KeyboardInterrupt:
             _print("\nSessão interrompida.")
             break
         elapsed_ms = int((time.perf_counter() - start) * 1000)

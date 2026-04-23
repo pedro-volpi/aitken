@@ -10,7 +10,6 @@ UI de terminal por TUI/GUI não muda nada aqui.
 - :class:`Attempt` — a tentativa do usuário em resposta a um ``Problem``,
   com latência medida e veredito de correção.
 """
-from __future__ import annotations
 
 from dataclasses import dataclass
 

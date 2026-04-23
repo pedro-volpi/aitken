@@ -1,5 +1,4 @@
 """Testes de :class:`AttemptRepo` e do pipeline de migração."""
-from __future__ import annotations
 
 from pathlib import Path
 
@@ -45,18 +44,22 @@ def test_record_increments_count(repo: AttemptRepo) -> None:
 
 
 def test_count_filters_by_module(repo: AttemptRepo) -> None:
-    repo.record(Attempt(
-        problem=_problem(module="tables"),
-        user_answer="56",
-        elapsed_ms=800,
-        correct=True,
-    ))
-    repo.record(Attempt(
-        problem=Problem("squares", "squares:7", "7²", "49"),
-        user_answer="49",
-        elapsed_ms=2000,
-        correct=True,
-    ))
+    repo.record(
+        Attempt(
+            problem=_problem(module="tables"),
+            user_answer="56",
+            elapsed_ms=800,
+            correct=True,
+        )
+    )
+    repo.record(
+        Attempt(
+            problem=Problem("squares", "squares:7", "7²", "49"),
+            user_answer="49",
+            elapsed_ms=2000,
+            correct=True,
+        )
+    )
     assert repo.count() == 2
     assert repo.count(module_id="tables") == 1
     assert repo.count(module_id="squares") == 1
@@ -80,9 +83,7 @@ def test_migrations_idempotent(tmp_path: Path) -> None:
     conn1 = open_db(db_path)
     conn1.close()
     conn2 = open_db(db_path)
-    row = conn2.execute(
-        "SELECT MAX(version) AS v FROM schema_version"
-    ).fetchone()
+    row = conn2.execute("SELECT MAX(version) AS v FROM schema_version").fetchone()
     assert row["v"] == 1
     conn2.close()
 

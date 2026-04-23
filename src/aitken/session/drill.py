@@ -20,7 +20,6 @@ A UI (seja terminal, Textual ou GUI futura) é quem mede latência, lê
 entrada do usuário e renderiza feedback. Trocar a UI é trocar o driver
 do loop — a sessão fica idêntica.
 """
-from __future__ import annotations
 
 from collections.abc import Iterator
 from random import Random
@@ -71,9 +70,7 @@ class DrillSession:
             ValueError: se ``max_problems <= 0``.
         """
         if max_problems <= 0:
-            raise ValueError(
-                f"max_problems deve ser > 0, recebeu {max_problems}"
-            )
+            raise ValueError(f"max_problems deve ser > 0, recebeu {max_problems}")
         self._generator = generator
         self._repo = repo
         self._max_problems = max_problems
@@ -125,9 +122,7 @@ class DrillSession:
             ValueError: se ``elapsed_ms`` é negativo.
         """
         if elapsed_ms < 0:
-            raise ValueError(
-                f"elapsed_ms não pode ser negativo, recebeu {elapsed_ms}"
-            )
+            raise ValueError(f"elapsed_ms não pode ser negativo, recebeu {elapsed_ms}")
         correct = self._generator.check(problem, user_answer)
         attempt = Attempt(
             problem=problem,

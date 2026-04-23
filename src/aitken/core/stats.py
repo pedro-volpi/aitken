@@ -9,7 +9,6 @@ Percentis são reportados como ``None`` quando o número de amostras é
 insuficiente para dar um sinal confiável (<10 para p90). Isso evita
 relatar "p90 = 1.2s" baseado em 3 medidas.
 """
-from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass

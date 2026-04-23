@@ -10,7 +10,6 @@ Parâmetros e invariantes estão em :class:`TablesParams`. O gerador em si
 aleatoriedade vem do ``Random`` passado em ``next()``, o que torna sessões
 reprodutíveis quando a seed é fixada.
 """
-from __future__ import annotations
 
 from dataclasses import dataclass
 from random import Random
@@ -46,13 +45,9 @@ class TablesParams:
 
     def __post_init__(self) -> None:
         if self.min_factor < 0:
-            raise ValueError(
-                f"min_factor deve ser >= 0, recebeu {self.min_factor}"
-            )
+            raise ValueError(f"min_factor deve ser >= 0, recebeu {self.min_factor}")
         if self.min_factor > self.max_factor:
-            raise ValueError(
-                f"min_factor ({self.min_factor}) > max_factor ({self.max_factor})"
-            )
+            raise ValueError(f"min_factor ({self.min_factor}) > max_factor ({self.max_factor})")
         if self.exclude_trivial:
             effective_min = max(self.min_factor, 2)
             if effective_min > self.max_factor:

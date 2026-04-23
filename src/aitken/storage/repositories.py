@@ -8,7 +8,6 @@ Nesta iteração existe apenas :class:`AttemptRepo` — quando o scheduler
 SM-2 e a progressão por nível forem implementados, eles ganharão repos
 próprios (``ScheduleRepo``, ``LevelRepo``) seguindo o mesmo padrão.
 """
-from __future__ import annotations
 
 import sqlite3
 from datetime import UTC, datetime
@@ -64,9 +63,7 @@ class AttemptRepo:
                 (ex.: ``"tables"``). Se ``None``, conta todas.
         """
         if module_id is None:
-            row = self._conn.execute(
-                "SELECT COUNT(*) AS n FROM attempts"
-            ).fetchone()
+            row = self._conn.execute("SELECT COUNT(*) AS n FROM attempts").fetchone()
         else:
             row = self._conn.execute(
                 "SELECT COUNT(*) AS n FROM attempts WHERE module_id = ?",

@@ -4,7 +4,6 @@ Delega à :func:`aitken.cli.main` para que ``python -m aitken`` e o
 console script ``aitken`` (definido em pyproject.toml) tenham o mesmo
 comportamento.
 """
-from __future__ import annotations
 
 import sys
 

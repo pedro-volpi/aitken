@@ -1,5 +1,4 @@
 """Testes de :func:`aitken.core.stats.summarize`."""
-from __future__ import annotations
 
 from aitken.core.problem import Attempt, Problem
 from aitken.core.stats import summarize

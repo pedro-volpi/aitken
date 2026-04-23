@@ -9,7 +9,6 @@ Schema atual (v1):
     attempts — histórico de tentativas, fonte de verdade para stats,
                scheduler SM-2 futuro e heatmap de fraquezas.
 """
-from __future__ import annotations
 
 import sqlite3
 
@@ -53,10 +52,7 @@ def migrate(conn: sqlite3.Connection) -> None:
             fecha a conexão — o chamador controla o lifecycle.
     """
     conn.executescript(_SCHEMA_BOOTSTRAP)
-    applied = {
-        row[0]
-        for row in conn.execute("SELECT version FROM schema_version").fetchall()
-    }
+    applied = {row[0] for row in conn.execute("SELECT version FROM schema_version").fetchall()}
     for version, sql in _MIGRATIONS:
         if version in applied:
             continue

@@ -1,5 +1,4 @@
 """Testes de :class:`DrillSession` — orquestração e persistência."""
-from __future__ import annotations
 
 from pathlib import Path
 from random import Random

@@ -4,7 +4,6 @@ Cobrem: amostragem dentro da faixa, filtro de triviais, canonicalização
 de chaves comutativas, validação de ``TablesParams``, determinismo por
 seed e parsing de respostas em ``check``.
 """
-from __future__ import annotations
 
 from random import Random
 
@@ -44,13 +43,10 @@ def test_excludes_trivial_by_default() -> None:
 
 
 def test_includes_trivial_when_disabled() -> None:
-    gen = TablesGenerator(
-        TablesParams(min_factor=0, max_factor=9, exclude_trivial=False)
-    )
+    gen = TablesGenerator(TablesParams(min_factor=0, max_factor=9, exclude_trivial=False))
     rng = Random(42)
     saw_trivial = any(
-        _split_prompt(gen.next(rng).prompt)[0] < 2
-        or _split_prompt(gen.next(rng).prompt)[1] < 2
+        _split_prompt(gen.next(rng).prompt)[0] < 2 or _split_prompt(gen.next(rng).prompt)[1] < 2
         for _ in range(500)
     )
     assert saw_trivial

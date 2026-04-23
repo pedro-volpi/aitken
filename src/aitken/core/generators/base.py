@@ -15,7 +15,6 @@ Separação de responsabilidades:
   ``"a/b"``, decimais aceitam ``","`` ou ``"."``, etc. Cada módulo conhece
   suas próprias regras.
 """
-from __future__ import annotations
 
 from random import Random
 from typing import Protocol, runtime_checkable

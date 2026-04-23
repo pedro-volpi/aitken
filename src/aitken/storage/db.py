@@ -4,7 +4,6 @@ O resto da aplicação nunca importa ``sqlite3`` diretamente — sempre passa
 por ``open_db`` para garantir pragmas consistentes. Se um dia trocarmos o
 backend de persistência, apenas ``storage/`` muda.
 """
-from __future__ import annotations
 
 import sqlite3
 from pathlib import Path

@@ -8,7 +8,6 @@ a variável estiver definida, caso contrário ``~/.local/share/aitken/``.
 Isto é padrão em sistemas Linux e funciona em macOS sem surpresas. O
 usuário pode sempre sobrescrever via ``--db`` na linha de comando.
 """
-from __future__ import annotations
 
 import os
 from pathlib import Path

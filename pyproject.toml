@@ -7,20 +7,19 @@ name = "aitken"
 version = "1.0.0"
 description = "Treinador CLI de aritmética mental com diagnóstico por latência e repetição espaçada."
 readme = "README.md"
-requires-python = ">=3.11"
-license = { text = "MIT" }
+requires-python = ">=3.14"
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [
-    { name = "Pedro Volpina Cif", email = "pedrovolpinacif@gmail.com" },
+    { name = "Pedro Volpi Nacif", email = "pedrovolpinacif@gmail.com" },
 ]
 keywords = ["mental-math", "arithmetic", "spaced-repetition", "cli", "tui"]
 classifiers = [
     "Development Status :: 2 - Pre-Alpha",
     "Environment :: Console",
     "Intended Audience :: Education",
-    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Education",
 ]
 dependencies = [
@@ -44,7 +43,7 @@ packages = ["src/aitken"]
 
 [tool.ruff]
 line-length = 100
-target-version = "py311"
+target-version = "py314"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
@@ -56,5 +55,5 @@ addopts = "-ra --strict-markers"
 
 [tool.mypy]
 strict = true
-files = ["src/aitken"]
-python_version = "3.11"
+files = ["src/aitken", "tests"]
+python_version = "3.14"

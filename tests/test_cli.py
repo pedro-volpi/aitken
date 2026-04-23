@@ -1,10 +1,8 @@
 """Testes da CLI: parser e integração ``main()`` ↔ filesystem."""
-from __future__ import annotations
 
 import sqlite3
 from pathlib import Path
 from random import Random
-from typing import Any
 from unittest.mock import patch
 
 import pytest
@@ -40,15 +38,23 @@ def test_parser_tables_defaults() -> None:
 
 def test_parser_tables_overrides() -> None:
     parser = build_parser()
-    args = parser.parse_args([
-        "drill", "tables",
-        "--min", "3", "--max", "12",
-        "-n", "15",
-        "--include-trivial",
-        "--no-commutative",
-        "--seed", "42",
-        "--no-persist",
-    ])
+    args = parser.parse_args(
+        [
+            "drill",
+            "tables",
+            "--min",
+            "3",
+            "--max",
+            "12",
+            "-n",
+            "15",
+            "--include-trivial",
+            "--no-commutative",
+            "--seed",
+            "42",
+            "--no-persist",
+        ]
+    )
     assert args.min_factor == 3
     assert args.max_factor == 12
     assert args.count == 15
@@ -75,10 +81,14 @@ def test_main_runs_drill_tables(tmp_path: Path) -> None:
         return next(answers_iter)
 
     argv = [
-        "drill", "tables",
-        "--count", "3",
-        "--seed", "42",
-        "--db", str(db_path),
+        "drill",
+        "tables",
+        "--count",
+        "3",
+        "--seed",
+        "42",
+        "--db",
+        str(db_path),
     ]
 
     with patch("builtins.input", fake_input):
@@ -94,14 +104,21 @@ def test_main_runs_drill_tables(tmp_path: Path) -> None:
         conn.close()
 
 
-def test_main_reports_validation_error(capsys: Any, tmp_path: Path) -> None:
+def test_main_reports_validation_error(capsys: pytest.CaptureFixture[str]) -> None:
     """``--min 5 --max 3`` deve falhar com exit code 1 e mensagem em stderr."""
-    rc = main([
-        "drill", "tables",
-        "--min", "5", "--max", "3",
-        "--count", "1",
-        "--no-persist",
-    ])
+    rc = main(
+        [
+            "drill",
+            "tables",
+            "--min",
+            "5",
+            "--max",
+            "3",
+            "--count",
+            "1",
+            "--no-persist",
+        ]
+    )
     assert rc == 1
     captured = capsys.readouterr()
     assert "erro" in captured.err.lower()

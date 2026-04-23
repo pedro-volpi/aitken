@@ -14,9 +14,9 @@ Convenção: cada módulo de drill vira um subcomando de ``drill``. Ex.:
 Parser é devolvido pela :func:`build_parser` separadamente do
 :func:`main` para permitir testes (``build_parser().parse_args([...])``).
 """
-from __future__ import annotations
 
 import argparse
+import sqlite3
 import sys
 from pathlib import Path
 from random import Random
@@ -47,7 +47,9 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _add_tables_subparser(drill_sub: argparse._SubParsersAction) -> None:  # type: ignore[type-arg]
+def _add_tables_subparser(
+    drill_sub: argparse._SubParsersAction[argparse.ArgumentParser],
+) -> None:
     """Configura o subcomando ``drill tables``."""
     p = drill_sub.add_parser(
         "tables",
@@ -59,35 +61,52 @@ def _add_tables_subparser(drill_sub: argparse._SubParsersAction) -> None:  # typ
         ),
     )
     p.add_argument(
-        "--min", type=int, default=2, dest="min_factor",
+        "--min",
+        type=int,
+        default=2,
+        dest="min_factor",
         help="Menor fator incluído (default: 2).",
     )
     p.add_argument(
-        "--max", type=int, default=9, dest="max_factor",
+        "--max",
+        type=int,
+        default=9,
+        dest="max_factor",
         help="Maior fator incluído (default: 9).",
     )
     p.add_argument(
-        "--count", "-n", type=int, default=30, dest="count",
+        "--count",
+        "-n",
+        type=int,
+        default=30,
+        dest="count",
         help="Número de problemas na sessão (default: 30).",
     )
     p.add_argument(
-        "--include-trivial", action="store_true",
+        "--include-trivial",
+        action="store_true",
         help="Inclui pares com fator 0 ou 1 (default: exclui).",
     )
     p.add_argument(
-        "--no-commutative", action="store_true",
+        "--no-commutative",
+        action="store_true",
         help="Trata 7×8 e 8×7 como pares distintos nas stats.",
     )
     p.add_argument(
-        "--seed", type=int, default=None,
+        "--seed",
+        type=int,
+        default=None,
         help="Seed do gerador aleatório (reprodutibilidade).",
     )
     p.add_argument(
-        "--db", type=Path, default=DEFAULT_DB_PATH,
+        "--db",
+        type=Path,
+        default=DEFAULT_DB_PATH,
         help=f"Arquivo SQLite do histórico (default: {DEFAULT_DB_PATH}).",
     )
     p.add_argument(
-        "--no-persist", action="store_true",
+        "--no-persist",
+        action="store_true",
         help="Não grava esta sessão no banco.",
     )
     p.set_defaults(func=cmd_drill_tables)
@@ -117,7 +136,7 @@ def cmd_drill_tables(args: argparse.Namespace) -> int:
     rng = Random(args.seed)
 
     repo: AttemptRepo | None = None
-    conn = None
+    conn: sqlite3.Connection | None = None
     try:
         if not args.no_persist:
             conn = open_db(args.db)
