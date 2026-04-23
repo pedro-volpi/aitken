@@ -29,6 +29,12 @@ coverage.xml
 .ruff_cache/
 .dmypy.json
 
+# User data (SQLite)
+data/*.db
+data/*.db-journal
+data/*.db-wal
+data/*.db-shm
+
 # Matplotlib
 .matplotlib/
 
