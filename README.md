@@ -28,7 +28,7 @@ aitken drill tables --include-trivial            # inclui pares com ×0 e ×1
 aitken drill tables --no-persist                 # não grava no banco
 ```
 
-Outros módulos de drill (quadrados, multidígito, atalhos), `aitken diagnostic`, `aitken stats` e `aitken plot` estão no [Roadmap](#roadmap).
+Outros módulos de drill (quadrados, multidígito, atalhos), `aitken diagnostic`, `aitken stats` e `aitken plot` estão listados em [Funcionalidades](#funcionalidades).
 
 ## Arquitetura
 
@@ -44,6 +44,26 @@ ui/  →  session/  →  storage/
 - **`storage/`** — adaptador SQLite. Depende apenas dos tipos de `core/`.
 - **`session/`** — casos de uso (DrillSession, DiagnosticSession). Orquestra `core/` + `storage/`. Hoje devolve resultados de forma síncrona; `session/events.py` fica reservado para uma API baseada em eventos que UIs assíncronas (Textual, GUI) consumirão sem tocar em `core/`.
 - **`ui/`** — `ui/plain.py` é o adaptador de terminal síncrono que hoje executa todas as sessões. `ui/textual/` e `ui/plot.py` são ganchos para adaptadores futuros que consomem os mesmos contratos de `session/`.
+
+## Funcionalidades
+
+Linhas marcadas com ✗ são planejadas — o nome exato do comando pode mudar quando forem implementadas.
+
+| Funcionalidade | Descrição | Como chamar | Implementado |
+| --- | --- | --- | --- |
+| Treino de tabuada | Sessão cronometrada de multiplicações na faixa configurada (padrão 2-9, estensível até qualquer inteiro). Imprime feedback por problema e resumo de acertos + latência ao final. Aceita `--count`, `--min`, `--max`, `--seed`, `--include-trivial`, `--no-persist`. | `aitken drill tables` | ✓ |
+| Histórico persistente | Cada tentativa é gravada em SQLite local (`~/.local/share/aitken/aitken.db` por padrão, respeitando `$XDG_DATA_HOME`). Base para as estatísticas e progressão futuras. | automático em qualquer `drill` (desabilitável com `--no-persist`) | ✓ |
+| Treino de quadrados | Sessão cronometrada de quadrados até 25². | `aitken drill squares` | ✗ |
+| Treino multidígito | Multiplicações 2d×1d, 2d×2d, 3d×1d, 3d×2d, 3d×3d. | `aitken drill multidigit` | ✗ |
+| Treino de atalhos | Operações com atalhos mentais: ×11, ×25, ×125, (10a+5)². | `aitken drill tricks` | ✗ |
+| Diagnóstico de fraquezas | 100 pares aleatórios com mapa dos pares mais lentos, para priorizar estudo. | `aitken diagnostic` | ✗ |
+| Estatísticas agregadas | Latência mediana e p90 por nível ao longo de todo o histórico. | `aitken stats` | ✗ |
+| Gráficos de evolução | Gráficos semanais de acerto e latência gerados via matplotlib. | `aitken plot` | ✗ |
+| Repetição espaçada (SM-2) | Amostragem ponderada por latência que prioriza pares lentos em vez de sortear uniformemente. | automático em `drill` | ✗ |
+| Progressão automática de níveis | Desbloqueio do próximo nível (ex.: 2d×2d após tabuada) quando a latência mediana cai abaixo do limiar configurado. | automático | ✗ |
+| Export de histórico | Export das tentativas em CSV ou JSON para análise externa. | `aitken export` | ✗ |
+| Modo Textual (TUI) | Interface interativa em terminal com painel de stats ao vivo e heatmap de latência por par. | `aitken tui` | ✗ |
+| Major System | Apoio mnemônico (Major System) para memória de trabalho em 3d×3d e 4d×4d. | integrado ao `drill multidigit` | ✗ |
 
 ## Implementação detalhada
 
@@ -203,10 +223,3 @@ ruff check src tests      # lint
 ruff format src tests     # formatação
 mypy src/aitken           # tipos
 ```
-
-## Roadmap
-
-- Níveis: tabuada 2-9, 2-19, 2d×1d, 2d×2d, quadrados até 25², 3d×1d, 3d×2d, 3d×3d, atalhos (×11, ×25, ×125, (10a+5)²).
-- Major System para memória de trabalho em 3d×3d e 4d×4d.
-- Export CSV/JSON do histórico.
-- Modo Textual com painel de stats ao vivo (heatmap de latência por par da tabuada).
