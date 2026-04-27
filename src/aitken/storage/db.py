@@ -16,8 +16,11 @@ def open_db(path: Path) -> sqlite3.Connection:
 
     Configura pragmas razoáveis para uso interativo local:
 
-    - ``journal_mode=WAL``: leituras concorrentes sem travar escritas;
-      produz arquivos auxiliares ``*.db-wal`` e ``*.db-shm``.
+    - ``journal_mode=DELETE``: rollback journal padrão. WAL seria mais
+      rápido em cargas concorrentes, mas o repo vive numa pasta
+      sincronizada pelo OneDrive — o provider ``CloudStorage`` do macOS
+      interfere nos locks de ``*.db-wal``/``*.db-shm`` e provoca
+      ``disk I/O error`` em escritas. Single-user CLI não precisa de WAL.
     - ``foreign_keys=ON``: respeita ``FOREIGN KEY`` (necessário porque
       SQLite desabilita por padrão).
     - ``synchronous=NORMAL``: equilíbrio razoável entre durabilidade e
@@ -40,7 +43,7 @@ def open_db(path: Path) -> sqlite3.Connection:
     # operações pontuais; transações maiores seriam o caso de usar `with conn:`.
     conn = sqlite3.connect(str(path), isolation_level=None)
     conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode = WAL")
+    conn.execute("PRAGMA journal_mode = DELETE")
     conn.execute("PRAGMA foreign_keys = ON")
     conn.execute("PRAGMA synchronous = NORMAL")
     migrate(conn)
