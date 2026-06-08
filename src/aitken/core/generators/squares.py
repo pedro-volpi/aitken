@@ -10,11 +10,12 @@ Chave canônica: ``"squares:N"``. Prompt: ``"N²"``. Resposta esperada:
 """
 
 from collections.abc import Mapping, Sequence
+from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
 from random import Random
 
 from aitken.core.problem import Problem
-from aitken.core.scheduler import sampling_weight
+from aitken.core.scheduler import weighted_choice
 
 
 @dataclass(frozen=True, slots=True)
@@ -63,18 +64,29 @@ class SquaresGenerator:
     def all_keys(self) -> Sequence[str]:
         return self._all_keys
 
-    def next(self, rng: Random, *, weights: Mapping[str, float] | None = None) -> Problem:
+    def next(
+        self,
+        rng: Random,
+        *,
+        weights: Mapping[str, float] | None = None,
+        exclude: AbstractSet[str] = frozenset(),
+    ) -> Problem:
         """Sorteia uma base na faixa e devolve o problema ``N²``.
 
         Com ``weights``, amostra por chave; sem eles, escolha uniforme.
+        ``exclude`` evita repetir a chave anterior (best-effort).
         """
         if weights is None:
-            n = rng.choice(self._bases)
+            bases = (
+                [n for n in self._bases if f"squares:{n}" not in exclude]
+                if exclude
+                else self._bases
+            )
+            if not bases:
+                bases = self._bases
+            n = rng.choice(bases)
         else:
-            default = sampling_weight(None)
-            ws = [weights.get(k, default) for k in self._all_keys]
-            [chosen] = rng.choices(self._all_keys, weights=ws, k=1)
-            n = self._base_from_key(chosen)
+            n = self._base_from_key(weighted_choice(rng, self._all_keys, weights, exclude=exclude))
         return Problem(
             module_id=self.module_id,
             key=f"squares:{n}",

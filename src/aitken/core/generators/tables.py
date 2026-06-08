@@ -16,11 +16,12 @@ pares com baixa facilidade. Ver :mod:`aitken.core.scheduler`.
 """
 
 from collections.abc import Mapping, Sequence
+from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
 from random import Random
 
 from aitken.core.problem import Problem
-from aitken.core.scheduler import sampling_weight
+from aitken.core.scheduler import weighted_choice
 
 
 @dataclass(frozen=True, slots=True)
@@ -98,22 +99,30 @@ class TablesGenerator:
         """Lista imutável de todas as chaves distintas no pool configurado."""
         return self._all_keys
 
-    def next(self, rng: Random, *, weights: Mapping[str, float] | None = None) -> Problem:
+    def next(
+        self,
+        rng: Random,
+        *,
+        weights: Mapping[str, float] | None = None,
+        exclude: AbstractSet[str] = frozenset(),
+    ) -> Problem:
         """Produz um novo problema de tabuada.
 
         Sem ``weights``, usa amostragem por rejeição uniforme (filtrando
         pares triviais). Com ``weights``, escolhe entre :meth:`all_keys`
         proporcionalmente ao peso — chaves ausentes recebem o peso padrão
         de :func:`aitken.core.scheduler.sampling_weight` para ``None``.
+        ``exclude`` evita repetir a chave canônica anterior (best-effort):
+        ``7 × 8`` e ``8 × 7`` compartilham chave, logo nenhum dos dois
+        reaparece logo após o outro.
         """
         if weights is None:
             a, b = self._draw(rng)
+            if exclude and any(k not in exclude for k in self._all_keys):
+                while self._key_for(a, b) in exclude:
+                    a, b = self._draw(rng)
             return self._make_problem(a, b)
-        keys = self._all_keys
-        default = sampling_weight(None)
-        ws = [weights.get(k, default) for k in keys]
-        [chosen] = rng.choices(keys, weights=ws, k=1)
-        a, b = self._parse_key(chosen)
+        a, b = self._parse_key(weighted_choice(rng, self._all_keys, weights, exclude=exclude))
         # Para pares comutativos não-diagonais, randomiza a ordem de
         # apresentação — a chave canônica é a mesma, mas o usuário vê
         # "7 × 8" e "8 × 7" alternando.
@@ -132,15 +141,17 @@ class TablesGenerator:
             return False
         return value == int(problem.expected_answer)
 
-    def _make_problem(self, a: int, b: int) -> Problem:
+    def _key_for(self, a: int, b: int) -> str:
+        """Chave canônica do par; normaliza ordem se ``commutative_pairs``."""
         if self._params.commutative_pairs:
             lo, hi = (a, b) if a <= b else (b, a)
-            key = f"tables:{lo}x{hi}"
-        else:
-            key = f"tables:{a}x{b}"
+            return f"tables:{lo}x{hi}"
+        return f"tables:{a}x{b}"
+
+    def _make_problem(self, a: int, b: int) -> Problem:
         return Problem(
             module_id=self.module_id,
-            key=key,
+            key=self._key_for(a, b),
             prompt=f"{a} × {b}",
             expected_answer=str(a * b),
         )

@@ -17,6 +17,35 @@ atribuído em `record()` (None se correto, o próprio `problem` se errado) e
 consultado em `__iter__`. A posição 1-indexada exposta via
 `current_position` **não** avança em retry.
 
+## Política padrão de drills: sem repetição consecutiva
+
+Dois sorteios *frescos* seguidos nunca produzem a mesma chave — depois de
+um problema ser dominado, o próximo problema distinto é necessariamente
+outro. O **retry-on-wrong é estruturalmente isento**: reapresentar a
+questão errada não passa pelo gerador (`_pending_retry`), então continua
+mostrando a mesma chave até o acerto.
+
+A restrição é **best-effort**: se o universo tem uma única chave (ex.:
+`squares` com `min_base == max_base`), a repetição é permitida — nunca
+falha por pool vazio.
+
+Implementação (separação política/mecanismo, espelhando o retry):
+
+- *Política* em `DrillSession`: campo `_last_key: str | None`, gravado em
+  `__iter__` a cada `yield` e passado como `exclude={_last_key}` no
+  próximo sorteio fresco.
+- *Mecanismo* em `core`: `Generator.next` recebe
+  `exclude: AbstractSet[str] = frozenset()` e amostra via
+  `weighted_choice(rng, keys, weights, *, exclude)` em
+  `src/aitken/core/scheduler.py`, que filtra as chaves excluídas **antes**
+  do `rng.choices`. Filtrar a chave (não zerar o peso) é obrigatório:
+  chave ausente em `weights` recebe peso *máximo*
+  (`sampling_weight(None)`), então omiti-la a priorizaria, não a
+  suprimiria. Com `exclude` vazio o consumo do `rng` é idêntico ao sorteio
+  direto — preserva reprodutibilidade com seed.
+
+Não adicionar flag para desligar a regra sem solicitação explícita.
+
 ## Política padrão de drills: SM-2 ponderado por latência
 
 Todo drill amostra pelo scheduler SM-2 de `src/aitken/core/scheduler.py`.
@@ -35,7 +64,7 @@ O ciclo:
 
 Contrato do `Generator` (`src/aitken/core/generators/base.py`):
 
-- `next(rng, *, weights=None) -> Problem`
+- `next(rng, *, weights=None, exclude=frozenset()) -> Problem`
 - `all_keys() -> Sequence[str]`
 - `check(problem, user_answer) -> bool`
 
@@ -56,7 +85,7 @@ contrato de `DrillSession` deve respeitar a mesma restrição.
   em 3.14). Sintaxe PEP 758 (`except A, B:`) é válida e ruff format a
   aplica.
 - Toda mudança de código deve passar antes de commit:
-  - `pytest` (atualmente 116 testes, todos devem passar)
+  - `pytest` (atualmente 122 testes, todos devem passar)
   - `ruff check src tests`
   - `ruff format --check src tests`
   - `mypy` strict em `src/aitken` + `tests/` (config em `pyproject.toml`).

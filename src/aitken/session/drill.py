@@ -85,6 +85,7 @@ class DrillSession:
         self._pending_retry: Problem | None = None
         self._position = 0
         self._cycle_had_error = False
+        self._last_key: str | None = None
         self._cards: dict[str, Card] = (
             schedule_repo.load(generator.module_id) if schedule_repo is not None else {}
         )
@@ -115,6 +116,12 @@ class DrillSession:
         computados a partir dos ``Card`` correntes e o gerador recebe o
         dicionário em ``next(rng, weights=...)``. Retry curto-circuita o
         scheduler reemitindo exatamente a última questão errada.
+
+        **Sem repetição consecutiva**: cada sorteio fresco exclui a chave
+        do problema anterior (``exclude={self._last_key}``), de modo que
+        dois problemas distintos seguidos nunca coincidem. O retry é
+        estruturalmente isento — não chama ``next`` —, então reapresentar a
+        mesma questão errada continua valendo.
         """
         while self._remaining > 0 or self._pending_retry is not None:
             if self._pending_retry is not None:
@@ -126,7 +133,9 @@ class DrillSession:
                 problem = self._generator.next(
                     self._rng,
                     weights=weights_from_cards(self._cards),
+                    exclude={self._last_key} if self._last_key is not None else frozenset(),
                 )
+            self._last_key = problem.key
             yield problem
 
     def record(

@@ -17,8 +17,10 @@ Diferenças em relação ao SM-2 clássico:
   baixo e mantém o par sendo reapresentado.
 """
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
+from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
+from random import Random
 
 
 @dataclass(frozen=True, slots=True)
@@ -133,3 +135,44 @@ def weights_from_cards(cards: Mapping[str, Card]) -> dict[str, float]:
     como ainda não vistas (peso de :func:`sampling_weight` com ``None``).
     """
     return {k: sampling_weight(c) for k, c in cards.items()}
+
+
+def weighted_choice(
+    rng: Random,
+    keys: Sequence[str],
+    weights: Mapping[str, float],
+    *,
+    exclude: AbstractSet[str] = frozenset(),
+) -> str:
+    """Escolhe uma chave ponderada por ``weights``, evitando ``exclude``.
+
+    Chaves ausentes em ``weights`` recebem o peso padrão
+    :func:`sampling_weight` com ``None`` (máximo) — omitir uma chave do
+    mapa *não* a suprime, ao contrário, prioriza-a. Por isso a exclusão de
+    "não repetir consecutivamente" é feita filtrando ``keys``, nunca
+    mexendo nos pesos.
+
+    Args:
+        rng: fonte de aleatoriedade.
+        keys: universo de chaves amostráveis (de ``Generator.all_keys``).
+        weights: ``{key: peso}`` corrente do scheduler.
+        exclude: chaves a evitar. Best-effort: se removê-las esvaziaria o
+            pool (ex.: universo de uma única chave), o filtro é ignorado e
+            a repetição é permitida — nunca falha por pool vazio.
+
+    Returns:
+        Uma chave de ``keys``, fora de ``exclude`` sempre que houver
+        alternativa.
+
+    Note:
+        Com ``exclude`` vazio o caminho é idêntico ao sorteio direto sobre
+        ``keys`` — mesma sequência de consumo do ``rng``, preservando
+        reprodutibilidade com seed fixa.
+    """
+    candidates = [k for k in keys if k not in exclude] if exclude else list(keys)
+    if not candidates:
+        candidates = list(keys)
+    default = sampling_weight(None)
+    ws = [weights.get(k, default) for k in candidates]
+    [chosen] = rng.choices(candidates, weights=ws, k=1)
+    return chosen

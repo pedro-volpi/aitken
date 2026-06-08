@@ -1,5 +1,7 @@
 """Testes do scheduler SM-2 ponderado por latência."""
 
+from random import Random
+
 import pytest
 
 from aitken.core.scheduler import (
@@ -7,6 +9,7 @@ from aitken.core.scheduler import (
     quality_from_attempt,
     sampling_weight,
     update_card,
+    weighted_choice,
     weights_from_cards,
 )
 
@@ -111,3 +114,29 @@ def test_weights_from_cards_reflects_each_entry() -> None:
     w = weights_from_cards(cards)
     assert w.keys() == cards.keys()
     assert w["b"] > w["a"]
+
+
+def test_weighted_choice_never_returns_excluded() -> None:
+    keys = ["a", "b", "c", "d"]
+    weights = {k: 1.0 for k in keys}
+    # Mesmo com peso enorme na chave excluída, ela nunca é escolhida.
+    weights["a"] = 1000.0
+    for seed in range(50):
+        chosen = weighted_choice(Random(seed), keys, weights, exclude={"a"})
+        assert chosen != "a"
+
+
+def test_weighted_choice_empty_exclude_matches_direct_draw() -> None:
+    keys = ["a", "b", "c", "d"]
+    weights = {k: 1.0 for k in keys}
+    # exclude vazio: mesma sequência de consumo do rng que rng.choices direto.
+    for seed in range(20):
+        default = sampling_weight(None)
+        ws = [weights.get(k, default) for k in keys]
+        [expected] = Random(seed).choices(keys, weights=ws, k=1)
+        assert weighted_choice(Random(seed), keys, weights) == expected
+
+
+def test_weighted_choice_single_key_universe_allows_repeat() -> None:
+    # Universo de uma chave e ela está excluída → best-effort devolve ela mesma.
+    assert weighted_choice(Random(0), ["only"], {"only": 1.0}, exclude={"only"}) == "only"

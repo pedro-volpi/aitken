@@ -7,10 +7,11 @@ adicionar novos sem tocar em ``session/`` ou ``ui/``.
 
 Separação de responsabilidades:
 
-- ``next(rng, *, weights)`` produz o próximo :class:`Problem`. Quando
-  ``weights`` é dado, o gerador faz amostragem ponderada por chave
+- ``next(rng, *, weights, exclude)`` produz o próximo :class:`Problem`.
+  Quando ``weights`` é dado, o gerador faz amostragem ponderada por chave
   (integração com o scheduler SM-2 em :mod:`aitken.core.scheduler`). Sem
-  ``weights``, a amostragem é uniforme.
+  ``weights``, a amostragem é uniforme. ``exclude`` carrega as chaves a
+  evitar (política de não-repetição consecutiva da sessão).
 - ``all_keys()`` enumera o universo de chaves distintas no pool — o
   scheduler usa isso para saber o que ainda não foi visto.
 - ``check(problem, user_answer)`` interpreta e valida a resposta textual.
@@ -20,6 +21,7 @@ Separação de responsabilidades:
 """
 
 from collections.abc import Mapping, Sequence
+from collections.abc import Set as AbstractSet
 from random import Random
 from typing import Protocol, runtime_checkable
 
@@ -33,7 +35,13 @@ class Generator(Protocol):
     module_id: str
     """Identificador estável do módulo (ex.: ``"tables"``)."""
 
-    def next(self, rng: Random, *, weights: Mapping[str, float] | None = None) -> Problem:
+    def next(
+        self,
+        rng: Random,
+        *,
+        weights: Mapping[str, float] | None = None,
+        exclude: AbstractSet[str] = frozenset(),
+    ) -> Problem:
         """Produz o próximo problema a ser apresentado.
 
         Args:
@@ -42,6 +50,13 @@ class Generator(Protocol):
             weights: se fornecido, ``{key: peso}`` para amostragem
                 ponderada. Chaves ausentes são tratadas como peso padrão
                 (ver implementação). ``None`` = amostragem uniforme.
+            exclude: chaves a evitar nesta amostragem. A sessão usa isso
+                para impor "sem repetição consecutiva" (passa a chave do
+                problema anterior). **Invariante**: a ``key`` do problema
+                devolvido não está em ``exclude`` sempre que o pool tem
+                alternativa; se ``exclude`` cobrir todo o universo (ex.:
+                pool de uma única chave), a restrição é descartada
+                (best-effort) e a repetição é permitida.
 
         Returns:
             Um :class:`Problem` pronto para renderização.

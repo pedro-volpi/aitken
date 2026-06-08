@@ -5,6 +5,7 @@ from random import Random
 
 import pytest
 
+from aitken.core.generators.squares import SquaresGenerator, SquaresParams
 from aitken.core.generators.tables import TablesGenerator, TablesParams
 from aitken.session.drill import DrillSession
 from aitken.storage.db import open_db
@@ -237,6 +238,61 @@ def test_sm2_penalizes_after_error_in_cycle() -> None:
     # quality foi truncada em 2 → path de recall failure → streak = 0
     assert card.consecutive_correct == 0
     assert card.ease_factor < 2.5  # caiu ao menos 0.2
+
+
+def test_consecutive_fresh_draws_never_repeat() -> None:
+    """Dois sorteios frescos seguidos nunca compartilham chave.
+
+    Pool pequeno (3 chaves) e contagem alta forçam colisões frequentes
+    sem a regra; com ela, jamais. Todas as respostas corretas → nenhum
+    retry, logo a sequência observada é toda de sorteios frescos.
+    """
+    for seed in range(20):
+        session = DrillSession(
+            generator=SquaresGenerator(SquaresParams(min_base=11, max_base=13)),
+            attempt_repo=None,
+            schedule_repo=None,
+            max_problems=12,
+            rng=Random(seed),
+        )
+        keys: list[str] = []
+        for problem in session:
+            keys.append(problem.key)
+            session.record(problem, problem.expected_answer, elapsed_ms=500)
+        assert all(prev != cur for prev, cur in zip(keys, keys[1:], strict=False)), (
+            f"repetição consecutiva com seed {seed}: {keys}"
+        )
+
+
+def test_single_key_pool_allows_repeat() -> None:
+    """Pool de uma chave: a restrição é best-effort e a repetição é permitida."""
+    session = DrillSession(
+        generator=SquaresGenerator(SquaresParams(min_base=11, max_base=11)),
+        attempt_repo=None,
+        schedule_repo=None,
+        max_problems=4,
+        rng=Random(0),
+    )
+    keys: list[str] = []
+    for problem in session:
+        keys.append(problem.key)
+        session.record(problem, problem.expected_answer, elapsed_ms=500)
+    assert keys == ["squares:11"] * 4
+
+
+def test_no_repeat_rule_does_not_break_retry() -> None:
+    """Retry continua reapresentando a mesma chave — isento da regra."""
+    session = DrillSession(
+        generator=SquaresGenerator(SquaresParams(min_base=11, max_base=13)),
+        attempt_repo=None,
+        schedule_repo=None,
+        max_problems=3,
+        rng=Random(0),
+    )
+    iterator = iter(session)
+    first = next(iterator)
+    session.record(first, "wrong", elapsed_ms=500)
+    assert next(iterator).key == first.key, "retry deve reapresentar a mesma chave"
 
 
 def test_schedule_repo_persists_across_sessions(tmp_path: Path) -> None:
