@@ -72,6 +72,34 @@ Qualquer novo módulo precisa satisfazer os três; sem isso, o scheduler
 não consegue enumerar o universo nem amostrar ponderado. Não adicionar
 flag para desligar SM-2 sem solicitação explícita.
 
+## Estrutura é `core/`, arranjo é `ui/`
+
+`Problem` carrega uma `expression: Expression` (união fechada
+`Term | BinaryOp` em `src/aitken/core/expression.py`), não uma string já
+formatada. O gerador declara *o que* é o problema; `src/aitken/ui/layout.py`
+(`Layout`, `render`) decide *como* desenhá-lo. `render` é puro
+(`Expression -> list[str]`) — não imprime, não lê, não conhece `DrillSession`.
+
+`Problem.prompt` é `@property`, nunca campo: devolve `expression.inline()`,
+a forma canônica de uma linha. É ela que vai para a coluna `attempts.prompt`
+e para o resumo de fim de sessão. **O layout escolhido na UI não altera
+`prompt`** — mudar isso quebraria a continuidade do histórico no banco.
+
+Default é `Layout.VERTICAL` (conta armada, casas alinhadas); `--layout
+horizontal` é o escape. Módulos unários (`N²`, `N³`, `N!`) são `Term` e
+degradam para uma linha nos dois modos — não têm forma armada.
+
+Novo gerador declara `BinaryOp(left, operador, right)` ou `Term(texto)` e
+ganha os dois layouts de graça. Não formatar prompt em gerador nenhum.
+
+## O contador `[N/total]` é cromo periférico
+
+O contador nunca compete com a conta. `_format_hud` em `src/aitken/ui/plain.py` o coloca em uma linha só dele nos dois layouts, alinhado à direita da largura do terminal (menos uma coluna de folga, para não armar o wrap adiado dos terminais com auto-margin) e apagado com SGR *faint*.
+
+Ficar fora da linha do cursor não é só estética: o bloco inteiro vai como argumento único de `ask()`, e readline mede a largura do prompt a partir do último `\n`. Escape ANSI na linha em que o usuário digita descontaria colunas e bagunçaria backspace e setas. Qualquer estilo novo no prompt fica nas linhas anteriores.
+
+`src/aitken/ui/style.py` é o único módulo que emite ANSI, e só para *tirar* ênfase — nenhuma informação é codificada em cor, então a saída sem cor não perde nada. `supports_ansi(stream)` decide: só terminal interativo e sem `NO_COLOR` no ambiente. Sem flag de CLI para isso — `NO_COLOR` é a convenção de fato e o projeto evita knobs. Padear antes de colorir é obrigatório: escapes não ocupam coluna na tela mas contam em `len()`, então `rjust` sobre texto já colorido erra o alinhamento.
+
 ## Feedback nunca revela a resposta correta
 
 `_format_feedback` em `src/aitken/ui/plain.py` emite `x errado (sua: ...)`
@@ -85,7 +113,7 @@ contrato de `DrillSession` deve respeitar a mesma restrição.
   em 3.14). Sintaxe PEP 758 (`except A, B:`) é válida e ruff format a
   aplica.
 - Toda mudança de código deve passar antes de commit:
-  - `pytest` (atualmente 122 testes, todos devem passar)
+  - `pytest` (atualmente 148 testes, todos devem passar)
   - `ruff check src tests`
   - `ruff format --check src tests`
   - `mypy` strict em `src/aitken` + `tests/` (config em `pyproject.toml`).

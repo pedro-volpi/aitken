@@ -13,6 +13,7 @@ from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
 from random import Random
 
+from aitken.core.expression import Term
 from aitken.core.problem import Problem
 from aitken.core.scheduler import weighted_choice
 
@@ -86,7 +87,7 @@ class CubesGenerator:
         return Problem(
             module_id=self.module_id,
             key=f"cubes:{n}",
-            prompt=f"{n}³",
+            expression=Term(f"{n}³"),
             expected_answer=str(n**3),
         )
 

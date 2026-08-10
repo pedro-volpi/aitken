@@ -22,9 +22,11 @@ import time
 from collections.abc import Callable
 from typing import TextIO
 
-from aitken.core.problem import Attempt
+from aitken.core.problem import Attempt, Problem
 from aitken.core.stats import SessionSummary
 from aitken.session.drill import DrillSession
+from aitken.ui.layout import DEFAULT_LAYOUT, Layout, render
+from aitken.ui.style import faint, supports_ansi, terminal_width
 
 InputFn = Callable[[str], str]
 
@@ -34,6 +36,7 @@ def run(
     *,
     output: TextIO | None = None,
     input_fn: InputFn | None = None,
+    layout: Layout = DEFAULT_LAYOUT,
 ) -> SessionSummary:
     """Executa uma sessão inteira com I/O em texto e devolve o resumo.
 
@@ -45,6 +48,8 @@ def run(
             ``None`` (resolve para :func:`builtins.input` em tempo de
             chamada — necessário para que ``patch("builtins.input", ...)``
             em testes tenha efeito).
+        layout: disposição do problema na tela (ver :mod:`aitken.ui.layout`);
+            padrão conta armada.
 
     Returns:
         :class:`SessionSummary` da sessão (mesmo em caso de abandono via
@@ -58,6 +63,12 @@ def run(
         out.write(line + "\n")
         out.flush()
 
+    # Uma coluna de folga: escrever na última coluna arma o wrap adiado dos
+    # terminais com auto-margin, e a margem também evita o contador colado
+    # na borda. Largura lida uma vez — redimensionar vale da próxima sessão.
+    styled = supports_ansi(out)
+    hud_width = max(terminal_width() - 1, 0) if styled else 0
+
     total = session.total_problems
     _print(f"\nSessão: {total} problemas. Digite o resultado e Enter.")
     _print("Respostas erradas são reapresentadas até serem acertadas.")
@@ -65,7 +76,7 @@ def run(
 
     for problem in session:
         pos = session.current_position
-        prompt = f"[{pos}/{total}]  {problem.prompt} = "
+        prompt = _format_prompt(problem, pos, total, layout, hud_width=hud_width, styled=styled)
         start = time.perf_counter()
         try:
             answer = ask(prompt)
@@ -82,6 +93,76 @@ def run(
     for line in _format_summary(summary):
         _print(line)
     return summary
+
+
+def _format_prompt(
+    problem: Problem,
+    position: int,
+    total: int,
+    layout: Layout,
+    *,
+    hud_width: int = 0,
+    styled: bool = False,
+) -> str:
+    """Monta a string que o usuário vê e sob a qual digita a resposta.
+
+    O bloco inteiro vai como argumento único de ``ask()``: :func:`input`
+    aceita prompt multilinha, imprime tudo e lê na última linha. Manter isso
+    em uma só chamada preserva a cronometragem (um começo, um fim) e o
+    contrato de que ``input_fn`` recebe exatamente o que foi apresentado.
+
+    O contador ocupa **sempre** uma linha só sua, nos dois layouts, e uma
+    linha em branco separa do feedback do problema anterior. Conta armada::
+
+        <blank>
+                                                      [3/30]
+          17
+        × 86
+        =
+
+    Desenho de uma linha (``--layout horizontal``, ou termo atômico como
+    ``13²`` mesmo no vertical) — o contador continua acima, a conta segue
+    compacta::
+
+        <blank>
+                                                      [3/30]
+        17 × 86 =
+
+    Ter o contador fora da linha do cursor não é só estética: readline mede
+    a largura do prompt a partir do último ``\\n``, então os escapes ANSI do
+    :func:`_format_hud` ficam em linha anterior e não descontam colunas da
+    edição da resposta. Na conta armada isso também evita desalinhar as
+    colunas dos operandos.
+
+    Args:
+        hud_width: largura em que o contador é alinhado à direita. ``0``
+            (default) deixa na margem esquerda, sem padding.
+        styled: se o contador sai apagado (ANSI) ou cru.
+    """
+    lines = render(problem.expression, layout)
+    hud = _format_hud(position, total, width=hud_width, styled=styled)
+    if len(lines) == 1:
+        return f"\n{hud}\n{lines[0]} = "
+    block = "\n".join(lines)
+    return f"\n{hud}\n{block}\n= "
+
+
+def _format_hud(position: int, total: int, *, width: int, styled: bool) -> str:
+    """Formata o contador de posição como cromo periférico.
+
+    O ``rjust`` acontece **antes** do :func:`~aitken.ui.style.faint`: os
+    escapes ANSI não ocupam coluna nenhuma na tela, mas contam em ``len()``,
+    então padear o texto já colorido empurraria o contador para longe da
+    borda direita.
+
+    Exemplos:
+        >>> _format_hud(3, 30, width=0, styled=False)
+        '[3/30]'
+        >>> _format_hud(3, 30, width=10, styled=False)
+        '    [3/30]'
+    """
+    hud = f"[{position}/{total}]".rjust(width)
+    return faint(hud) if styled else hud
 
 
 def _format_feedback(attempt: Attempt) -> str:

@@ -13,6 +13,7 @@ from collections.abc import Set as AbstractSet
 from math import factorial
 from random import Random
 
+from aitken.core.expression import Term
 from aitken.core.problem import Problem
 from aitken.core.scheduler import weighted_choice
 
@@ -58,7 +59,7 @@ class FactorialGenerator:
         return Problem(
             module_id=self.module_id,
             key=f"factorial:{n}",
-            prompt=f"{n}!",
+            expression=Term(f"{n}!"),
             expected_answer=str(factorial(n)),
         )
 

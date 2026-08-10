@@ -8,8 +8,23 @@ from unittest.mock import patch
 import pytest
 
 from aitken.cli import build_parser, main
+from aitken.ui.layout import Layout
 
 _PROMPT_RE = re.compile(r"(\d+)\s*×\s*(\d+)")
+
+_ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
+
+
+def _bare(line: str) -> str:
+    """Linha sem estilo nem alinhamento.
+
+    ``main()`` escreve em ``sys.stdout``, que o pytest normalmente
+    substitui por um buffer não-tty (contador cru, na coluna 0) mas que
+    sob ``-s`` é o terminal de verdade (contador apagado, à direita).
+    Estes testes olham a *estrutura* do prompt, então normalizam os dois
+    casos em vez de depender do modo de captura.
+    """
+    return _ANSI_RE.sub("", line).strip()
 
 
 def test_parser_requires_command() -> None:
@@ -34,6 +49,7 @@ def test_parser_tables_defaults() -> None:
     assert args.include_trivial is False
     assert args.no_commutative is False
     assert args.no_persist is False
+    assert args.layout is Layout.VERTICAL
 
 
 def test_parser_tables_overrides() -> None:
@@ -155,6 +171,64 @@ def test_main_runs_drill_factorial(tmp_path: Path) -> None:
     with patch("builtins.input", fake_input):
         rc = main(argv)
     assert rc == 0
+
+
+def test_parser_layout_defaults_to_vertical_in_every_module() -> None:
+    """``--layout`` é flag comum: default vertical nos quatro módulos."""
+    parser = build_parser()
+    for module in ("tables", "squares", "cubes", "factorial"):
+        args = parser.parse_args(["drill", module])
+        assert args.layout is Layout.VERTICAL, module
+
+
+def test_parser_layout_override() -> None:
+    parser = build_parser()
+    for module in ("tables", "squares", "cubes", "factorial"):
+        args = parser.parse_args(["drill", module, "--layout", "horizontal"])
+        assert args.layout is Layout.HORIZONTAL, module
+
+
+def test_parser_rejects_unknown_layout() -> None:
+    parser = build_parser()
+    with pytest.raises(SystemExit) as exc:
+        parser.parse_args(["drill", "tables", "--layout", "diagonal"])
+    assert exc.value.code == 2
+
+
+def test_main_honors_layout_flag(tmp_path: Path) -> None:
+    """A flag chega até a UI: com --layout horizontal a conta é uma linha só.
+
+    O contador tem linha própria nos dois layouts (é cromo periférico, não
+    parte da conta), então o que distingue os modos é o desenho abaixo dele.
+    """
+    seen: list[str] = []
+
+    def fake_input(prompt: str = "") -> str:
+        seen.append(prompt)
+        match = _PROMPT_RE.search(prompt)
+        assert match is not None
+        return str(int(match.group(1)) * int(match.group(2)))
+
+    argv = ["drill", "tables", "--count", "2", "--db", str(tmp_path / "layout.db")]
+    with patch("builtins.input", fake_input):
+        assert main([*argv, "--layout", "horizontal"]) == 0
+    for prompt in seen:
+        blank, header, operation = prompt.split("\n")
+        assert blank == ""
+        assert _bare(header).startswith("[")
+        assert _PROMPT_RE.match(operation) is not None
+        assert operation.endswith(" = ")
+
+    seen.clear()
+    with patch("builtins.input", fake_input):
+        assert main(argv) == 0
+    for prompt in seen:
+        blank, header, left, right, equals = prompt.split("\n")
+        assert blank == ""
+        assert _bare(header).startswith("[")
+        assert len(left) == len(right)
+        assert right.startswith("× ")
+        assert equals == "= "
 
 
 def test_main_reports_validation_error(capsys: pytest.CaptureFixture[str]) -> None:

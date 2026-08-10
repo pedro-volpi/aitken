@@ -4,6 +4,7 @@ from random import Random
 
 import pytest
 
+from aitken.core.expression import Term
 from aitken.core.generators.cubes import CubesGenerator, CubesParams
 from aitken.core.generators.factorial import FactorialGenerator
 from aitken.core.generators.squares import SquaresGenerator, SquaresParams
@@ -50,14 +51,14 @@ def test_squares_weighted_respects_highest_weight() -> None:
 
 def test_squares_check_accepts_correct() -> None:
     gen = SquaresGenerator(SquaresParams())
-    p = Problem("squares", "squares:12", "12²", "144")
+    p = Problem("squares", "squares:12", Term("12²"), "144")
     assert gen.check(p, "144")
     assert gen.check(p, "  144\n")
 
 
 def test_squares_check_rejects_wrong() -> None:
     gen = SquaresGenerator(SquaresParams())
-    p = Problem("squares", "squares:12", "12²", "144")
+    p = Problem("squares", "squares:12", Term("12²"), "144")
     assert not gen.check(p, "143")
     assert not gen.check(p, "")
     assert not gen.check(p, "abc")
@@ -125,7 +126,7 @@ def test_cubes_expected_answers_spot_check() -> None:
 
 def test_cubes_check_accepts_correct() -> None:
     gen = CubesGenerator(CubesParams())
-    p = Problem("cubes", "cubes:4", "4³", "64")
+    p = Problem("cubes", "cubes:4", Term("4³"), "64")
     assert gen.check(p, "64")
 
 
@@ -174,13 +175,13 @@ def test_factorial_answers_for_each_base() -> None:
 
 def test_factorial_check_accepts_correct() -> None:
     gen = FactorialGenerator()
-    p = Problem("factorial", "factorial:5", "5!", "120")
+    p = Problem("factorial", "factorial:5", Term("5!"), "120")
     assert gen.check(p, "120")
 
 
 def test_factorial_check_rejects_non_numeric() -> None:
     gen = FactorialGenerator()
-    p = Problem("factorial", "factorial:5", "5!", "120")
+    p = Problem("factorial", "factorial:5", Term("5!"), "120")
     assert not gen.check(p, "")
     assert not gen.check(p, "abc")
 

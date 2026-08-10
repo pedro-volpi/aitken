@@ -6,12 +6,15 @@ UI de terminal por TUI/GUI não muda nada aqui.
 
 - :class:`Problem` — um item apresentável ao usuário. Gerado por um módulo
   (ex.: ``tables``), identificado por uma ``key`` canônica estável entre
-  sessões para agregação de estatísticas.
+  sessões para agregação de estatísticas. Carrega a estrutura da expressão
+  (:mod:`aitken.core.expression`), não uma string já formatada.
 - :class:`Attempt` — a tentativa do usuário em resposta a um ``Problem``,
   com latência medida e veredito de correção.
 """
 
 from dataclasses import dataclass
+
+from aitken.core.expression import Expression
 
 
 @dataclass(frozen=True, slots=True)
@@ -23,7 +26,9 @@ class Problem:
         key: chave canônica estável para agregação estatística. Dois
             problemas que devem compartilhar histórico (ex.: ``7 × 8`` e
             ``8 × 7`` sob ``commutative_pairs=True``) têm a mesma ``key``.
-        prompt: string legível para apresentação (ex.: ``"7 × 8"``).
+        expression: descrição *estrutural* do que é o problema (ver
+            :mod:`aitken.core.expression`). O gerador declara a estrutura;
+            a UI decide o arranjo (horizontal, armado, ...).
         expected_answer: forma canônica da resposta correta, em string
             (a verificação é delegada ao gerador, que sabe como interpretar
             a entrada do usuário).
@@ -31,8 +36,19 @@ class Problem:
 
     module_id: str
     key: str
-    prompt: str
+    expression: Expression
     expected_answer: str
+
+    @property
+    def prompt(self) -> str:
+        """Forma canônica de uma linha (ex.: ``"7 × 8"``).
+
+        Derivada de :attr:`expression`, nunca armazenada em separado — duas
+        cópias da mesma verdade divergiriam. É esta string que vai para a
+        coluna ``attempts.prompt`` e para o resumo de fim de sessão, e ela
+        **não** muda com o layout escolhido na UI.
+        """
+        return self.expression.inline()
 
 
 @dataclass(frozen=True, slots=True)

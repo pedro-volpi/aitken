@@ -20,6 +20,7 @@ from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
 from random import Random
 
+from aitken.core.expression import BinaryOp
 from aitken.core.problem import Problem
 from aitken.core.scheduler import weighted_choice
 
@@ -152,7 +153,7 @@ class TablesGenerator:
         return Problem(
             module_id=self.module_id,
             key=self._key_for(a, b),
-            prompt=f"{a} × {b}",
+            expression=BinaryOp(str(a), "×", str(b)),
             expected_answer=str(a * b),
         )
 

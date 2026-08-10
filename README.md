@@ -26,6 +26,7 @@ aitken drill tables --min 2 --max 19             # tabuada estendida
 aitken drill squares                             # quadrados (default: 11² a 25²; 2²-10² já saem da tabuada)
 aitken drill cubes                               # cubos (default: 3³ a 10³)
 aitken drill factorial                           # fatoriais de 0! a 10! (faixa fixa)
+aitken drill tables --layout horizontal          # `17 × 86` em vez da conta armada
 ```
 
 ### Parâmetros comuns a todo drill
@@ -34,6 +35,22 @@ Todos os subcomandos `aitken drill <módulo>` aceitam as mesmas flags de sessão
 
 - `--count N` / `-n N` — número de problemas *distintos* a dominar (default 30; `factorial` usa 20 por ter pool menor).
 - `--no-persist` — não grava tentativas nem o estado SM-2 desta sessão.
+- `--layout vertical|horizontal` — disposição do problema na tela (default `vertical`).
+
+O default é a **conta armada**, com as casas alinhadas (unidade sob unidade, dezena sob dezena) — a mesma disposição em que o algoritmo de multiplicação é treinado no papel, em que cada produto parcial tem uma coluna própria:
+
+```
+                                                    [3/30]
+  17
+× 86
+=
+```
+
+`--layout horizontal` volta à leitura compacta, com a conta em uma linha só (`17 × 86 = `). A flag afeta apenas operações binárias: `squares`, `cubes` e `factorial` são termos atômicos (`17²`, `5!`) e são sempre apresentados em uma linha, nos dois modos.
+
+O contador `[N/total]` é cromo periférico, não parte da conta: ocupa uma linha só sua nos dois layouts, encostado na borda direita e em cinza apagado. Quando a saída não é um terminal (pipe, redirecionamento, `NO_COLOR=1` no ambiente) ele sai cru e na margem esquerda. Ele conta problemas *distintos*, então congela durante o retry de uma resposta errada.
+
+O layout é puramente visual — não altera a chave SM-2, o `prompt` gravado no banco nem o resumo de fim de sessão.
 
 ### Flags específicas dos módulos
 
@@ -72,6 +89,7 @@ Linhas marcadas com ✗ são planejadas — o nome exato do comando pode mudar q
 | Treino de quadrados | Sessão de `N²` para `N` em `[--min, --max]` (default 11–25; `2²` a `10²` já saem da tabuada, daí o corte). Aceita `--min`, `--max`, `--include-trivial`. | `aitken drill squares` | ✓ |
 | Treino de cubos | Sessão de `N³` para `N` em `[--min, --max]` (default 3–10; `2³ = 8` é trivial). Aceita `--min`, `--max`, `--include-trivial`. | `aitken drill cubes` | ✓ |
 | Treino de fatoriais | Sessão de `N!` com `N` sorteado no pool fixo `{0, 1, ..., 10}` — sem parâmetros de faixa. | `aitken drill factorial` | ✓ |
+| Conta armada | Operações binárias são apresentadas empilhadas, com as casas alinhadas (unidade sob unidade). `--layout horizontal` volta à leitura em uma linha. Módulos unários (`N²`, `N³`, `N!`) são sempre de uma linha. | comum a todo `drill`, via `--layout` | ✓ |
 | Histórico persistente | Cada tentativa é gravada na tabela `attempts` e o estado SM-2 (`ease_factor`, streak de acertos) por chave em `schedule`. Banco em SQLite dentro do projeto (`data/aitken.db`). Para análise ad-hoc, o banco é consultável direto com `sqlite3` ou qualquer ferramenta SQL. | automático em qualquer `drill` (desabilitável com `--no-persist`) | ✓ |
 | Treino multidígito | Multiplicações 2d×1d, 2d×2d, 3d×1d, 3d×2d, 3d×3d. | `aitken drill multidigit` | ✗ |
 | Treino de atalhos | Operações com atalhos mentais: ×11, ×25, ×125, (10a+5)². | `aitken drill tricks` | ✗ |
@@ -106,13 +124,14 @@ A camada **`storage/`** fala `sqlite3` e nada mais além dos tipos de `core/`. `
 
 A camada **`session/`** orquestra mas não decide apresentação. `DrillSession` é um iterável: `__iter__` produz o próximo `Problem` chamando `generator.next(rng)`, `record(problem, answer, elapsed_ms)` avalia via `generator.check`, monta o `Attempt` e, se houver repo, persiste. A sessão nunca cronometra nem lê input — o driver faz isso e devolve o `elapsed_ms`. Esse é o contrato que qualquer UI (terminal, TUI, GUI futura) satisfaz.
 
-A camada **`ui/`** é o único lugar onde existem `input()`, `print()` e `time.perf_counter()`. `plain.run` é o adaptador atualmente em produção; qualquer outro (Textual, web) implementa uma função análoga consumindo a mesma sessão.
+A camada **`ui/`** é o único lugar onde existem `input()`, `print()` e `time.perf_counter()`. `plain.run` é o adaptador atualmente em produção; qualquer outro (Textual, web) implementa uma função análoga consumindo a mesma sessão. `ui/style.py` é o único módulo do projeto que emite ANSI, e só para apagar cromo — nunca para carregar informação, de modo que a saída sem cor não perde nada.
 
 ### Tipos de domínio
 
-Cinco dataclasses formam o vocabulário compartilhado entre as camadas:
+Seis dataclasses formam o vocabulário compartilhado entre as camadas:
 
-- **`Problem`** (`src/aitken/core/problem.py`) — `module_id`, `key` canônica (ex.: `tables:7x8` agrupa estatisticamente 7×8 e 8×7 quando `commutative_pairs=True`), `prompt` legível, `expected_answer` em string.
+- **`Problem`** (`src/aitken/core/problem.py`) — `module_id`, `key` canônica (ex.: `tables:7x8` agrupa estatisticamente 7×8 e 8×7 quando `commutative_pairs=True`), `expression` estrutural, `expected_answer` em string. `prompt` não é campo: é `@property` derivada de `expression.inline()`, para que a forma canônica de uma linha (a que vai para o banco e para o resumo) nunca possa divergir da estrutura.
+- **`Expression`** (`src/aitken/core/expression.py`) — união fechada `Term | BinaryOp`. `Term("17²")` é atômico; `BinaryOp("17", "×", "86")` preserva os operandos e o símbolo em separado. O gerador declara *o que* é a expressão; `ui/layout.py` decide *como* desenhá-la. Sem isso a UI receberia uma string já formatada e não teria como armar a conta.
 - **`Attempt`** (`src/aitken/core/problem.py`) — `problem`, `user_answer`, `correct`, `elapsed_ms`. É o que entra na tabela `attempts`.
 - **`TablesParams`** (`src/aitken/core/generators/tables.py`) — `frozen=True` com `__post_init__` validando faixas. Frozen porque parâmetros circulam entre threads e módulos; mutação silenciosa nunca é o que o usuário quer.
 - **`SessionSummary`** (`src/aitken/core/stats.py`) — `total`, `correct`, `accuracy`, `median_ms`, `p90_ms` (ou `None` se `total < 10`), `slowest`.
@@ -174,7 +193,8 @@ digraph aitken_call_chain {
     cli_build       [label="cli.build_parser"];
     cli_cmd_tables  [label="cli.cmd_drill_tables"];
     plain_run       [label="plain.run"];
-    plain_fmt       [label="plain._format_feedback\nplain._format_summary", style=dashed];
+    plain_fmt       [label="plain._format_prompt\nplain._format_feedback\nplain._format_summary", style=dashed];
+    layout_render   [label="layout.render"];
   }
 
   subgraph cluster_session {
@@ -231,6 +251,7 @@ digraph aitken_call_chain {
   plain_run      -> drill_sum;
   drill_sum      -> stats_sum;
   plain_run      -> plain_fmt       [style=dotted];
+  plain_fmt      -> layout_render   [label="layout=..."];
 
   gen_next       -> drill_iter      [label="Problem",        style=dashed, constraint=false];
   drill_record   -> attempt_rec     [label="Attempt",        style=dashed, constraint=false];
@@ -242,7 +263,11 @@ digraph aitken_call_chain {
 
 ### UI desacoplada
 
-A assinatura é `plain.run(session, *, output: TextIO | None = None, input_fn: Callable[[str], str] | None = None)`. Testes em `tests/ui/test_plain.py` instanciam um `_FakeInput` com uma lista de respostas pré-programadas e passam um `io.StringIO` como `output` — o loop roda até o fim sem tocar em `stdin`/`stdout`. Uma futura UI Textual ou GUI implementa um `run` análogo consumindo `DrillSession` via iteração + `record()`; `core/`, `session/` e `storage/` ficam intactos.
+A assinatura é `plain.run(session, *, output: TextIO | None = None, input_fn: Callable[[str], str] | None = None, layout: Layout = DEFAULT_LAYOUT)`. Testes em `tests/ui/test_plain.py` instanciam um `_FakeInput` com uma lista de respostas pré-programadas e passam um `io.StringIO` como `output` — o loop roda até o fim sem tocar em `stdin`/`stdout`. Uma futura UI Textual ou GUI implementa um `run` análogo consumindo `DrillSession` via iteração + `record()`; `core/`, `session/` e `storage/` ficam intactos.
+
+O bloco do problema (contador, operandos, `= `) é montado por `_format_prompt` e entregue **inteiro** como argumento único de `ask()`: `input()` aceita prompt multilinha, imprime tudo e lê na última linha. Isso mantém a cronometragem em um par `perf_counter` só e preserva o contrato de que `input_fn` recebe exatamente o que o usuário viu — o que também é o que torna os fakes dos testes capazes de derivar a resposta do prompt nos dois layouts.
+
+O arranjo em si mora em `src/aitken/ui/layout.py` (`Layout`, `render`), separado de `plain.py`: `render` é uma função pura `Expression -> list[str]` que não imprime nem lê, e qualquer UI futura reaproveita o mesmo desenho.
 
 ### Persistência opcional
 
@@ -251,6 +276,7 @@ A assinatura é `plain.run(session, *, output: TextIO | None = None, input_fn: C
 ### Adicionando um novo gerador
 
 - Implementar o `Protocol` `Generator` em `src/aitken/core/generators/base.py`: atributo `module_id: str`, método `next(rng: Random, *, weights: Mapping[str, float] | None = None, exclude: AbstractSet[str] = frozenset()) -> Problem`, método `all_keys() -> Sequence[str]`, método `check(problem: Problem, user_answer: str) -> bool`. Quando `weights` é passado, o gerador amostra ponderadamente por chave (integração com SM-2); sem pesos, amostragem uniforme. `exclude` carrega as chaves a evitar (política de não-repetição consecutiva) e deve ser honrado via `weighted_choice` — best-effort: ignorado se esvaziaria o pool.
+- Ao montar cada `Problem`, declarar a `expression`: `BinaryOp(left, operador, right)` para operações de dois operandos (ganha a conta armada de graça) ou `Term(texto)` para termos atômicos. O gerador não escolhe layout nem sabe que layouts existem — só descreve a estrutura.
 - Opcional: um dataclass `frozen=True` de parâmetros com `__post_init__` validador, seguindo `TablesParams`.
 - Em `cli.py`, espelhar `_add_tables_subparser` e escrever um `cmd_*` análogo a `cmd_drill_tables`. Os arquivos de outras camadas não mudam — a `DrillSession` já carrega o estado SM-2 correto para o novo módulo via `schedule_repo.load(generator.module_id)`.
 - `core/progression.py` hoje é stub — reservado para regras de desbloqueio automático de nível (liberar 2d×2d quando a tabuada ficar rápida).

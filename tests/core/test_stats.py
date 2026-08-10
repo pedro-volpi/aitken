@@ -1,5 +1,6 @@
 """Testes de :func:`aitken.core.stats.summarize`."""
 
+from aitken.core.expression import Term
 from aitken.core.problem import Attempt, Problem
 from aitken.core.stats import summarize
 
@@ -9,7 +10,7 @@ def _attempt(prompt: str, elapsed_ms: int, correct: bool) -> Attempt:
     problem = Problem(
         module_id="tables",
         key=f"tables:{prompt}",
-        prompt=prompt,
+        expression=Term(prompt),
         expected_answer="0",
     )
     return Attempt(

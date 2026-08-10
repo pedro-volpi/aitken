@@ -14,6 +14,7 @@ from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
 from random import Random
 
+from aitken.core.expression import Term
 from aitken.core.problem import Problem
 from aitken.core.scheduler import weighted_choice
 
@@ -90,7 +91,7 @@ class SquaresGenerator:
         return Problem(
             module_id=self.module_id,
             key=f"squares:{n}",
-            prompt=f"{n}²",
+            expression=Term(f"{n}²"),
             expected_answer=str(n * n),
         )
 

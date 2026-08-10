@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from aitken.core.expression import BinaryOp, Term
 from aitken.core.problem import Attempt, Problem
 from aitken.core.scheduler import Card
 from aitken.storage.db import open_db
@@ -21,7 +22,7 @@ def _problem(key: str = "tables:7x8", module: str = "tables") -> Problem:
     return Problem(
         module_id=module,
         key=key,
-        prompt="7 × 8",
+        expression=BinaryOp("7", "×", "8"),
         expected_answer="56",
     )
 
@@ -55,7 +56,7 @@ def test_count_filters_by_module(repo: AttemptRepo) -> None:
     )
     repo.record(
         Attempt(
-            problem=Problem("squares", "squares:7", "7²", "49"),
+            problem=Problem("squares", "squares:7", Term("7²"), "49"),
             user_answer="49",
             elapsed_ms=2000,
             correct=True,

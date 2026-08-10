@@ -32,6 +32,7 @@ from aitken.session.drill import DrillSession
 from aitken.storage.db import open_db
 from aitken.storage.repositories import AttemptRepo, ScheduleRepo
 from aitken.ui import plain
+from aitken.ui.layout import DEFAULT_LAYOUT, Layout
 
 _ROOT_DESCRIPTION = """\
 Treinador CLI de aritmética mental com foco em fluência por latência.
@@ -51,10 +52,18 @@ Exemplos:
   aitken drill tables --min 2 --max 19 -n 40     # tabuada estendida, 40 problemas
   aitken drill cubes -n 40                       # sessão maior de cubos
   aitken drill factorial --no-persist            # sessão descartável
+  aitken drill tables --layout horizontal        # 17 × 86 em vez de armado
 
 Flags comuns a todo drill:
   --count/-n N   problemas distintos a dominar
   --no-persist   não grava tentativas nem estado SM-2
+  --layout MODO  vertical (conta armada, default) ou horizontal
+
+Por padrão o problema é apresentado armado, com as casas alinhadas:
+
+    17
+  × 86
+  =
 
 O banco padrão é data/aitken.db dentro do projeto. Use --db PATH para
 apontar para outro arquivo (escape hatch; útil para testes).
@@ -70,7 +79,10 @@ Módulos:
   factorial   fatoriais (N!), pool fixo 0..10
 
 Cada módulo expõe --help com suas flags específicas, além das comuns
-(--count, --no-persist, --db).
+(--count, --no-persist, --db, --layout).
+
+--layout vertical (default) só muda o desenho de operações binárias; os
+módulos unários (N², N³, N!) são sempre apresentados em uma linha.
 """
 
 
@@ -114,12 +126,27 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _layout_arg(value: str) -> Layout:
+    """Converte o valor de ``--layout``, listando as opções em caso de erro.
+
+    ``type=Layout`` funcionaria, mas o ``ValueError`` do enum vira a mensagem
+    genérica "invalid Layout value" — e argparse converte *antes* de checar
+    ``choices``, então o usuário nunca veria a lista. Levantar
+    ``ArgumentTypeError`` deixa a mensagem sob nosso controle.
+    """
+    try:
+        return Layout(value)
+    except ValueError:
+        options = ", ".join(Layout)
+        raise argparse.ArgumentTypeError(f"valor inválido {value!r} (opções: {options})") from None
+
+
 def _add_common_drill_args(p: argparse.ArgumentParser, *, default_count: int = 30) -> None:
     """Flags comuns a todos os subcomandos de drill.
 
-    Cada chamada adiciona: ``--count/-n``, ``--db``, ``--no-persist``.
-    Módulos individuais acrescentam flags específicas (faixa, exclusão de
-    triviais etc.).
+    Cada chamada adiciona: ``--count/-n``, ``--db``, ``--no-persist``,
+    ``--layout``. Módulos individuais acrescentam flags específicas (faixa,
+    exclusão de triviais etc.).
     """
     p.add_argument(
         "--count",
@@ -139,6 +166,16 @@ def _add_common_drill_args(p: argparse.ArgumentParser, *, default_count: int = 3
         "--no-persist",
         action="store_true",
         help="Não grava esta sessão nem o estado SM-2 no banco.",
+    )
+    p.add_argument(
+        "--layout",
+        type=_layout_arg,
+        choices=list(Layout),
+        default=DEFAULT_LAYOUT,
+        help=(
+            f"Disposição do problema: vertical (conta armada) ou "
+            f"horizontal em uma linha (default: {DEFAULT_LAYOUT})."
+        ),
     )
 
 
@@ -312,7 +349,8 @@ def _run_drill(args: argparse.Namespace, generator: Generator) -> int:
     """Fluxo comum a todos os drills: abre DB, monta sessão, roda UI.
 
     Args:
-        args: ``Namespace`` já com ``count``, ``db``, ``no_persist``.
+        args: ``Namespace`` já com ``count``, ``db``, ``no_persist``,
+            ``layout``.
         generator: gerador específico do módulo (tables, squares, ...).
 
     Returns:
@@ -335,7 +373,7 @@ def _run_drill(args: argparse.Namespace, generator: Generator) -> int:
             max_problems=args.count,
             rng=rng,
         )
-        plain.run(session)
+        plain.run(session, layout=args.layout)
     finally:
         if conn is not None:
             conn.close()

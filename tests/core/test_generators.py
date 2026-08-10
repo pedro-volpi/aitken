@@ -9,6 +9,7 @@ from random import Random
 
 import pytest
 
+from aitken.core.expression import BinaryOp, Term
 from aitken.core.generators.tables import TablesGenerator, TablesParams
 from aitken.core.problem import Problem
 
@@ -94,20 +95,20 @@ def test_module_id_on_problem() -> None:
 
 def test_check_accepts_correct() -> None:
     gen = TablesGenerator(TablesParams())
-    p = Problem("tables", "tables:7x8", "7 × 8", "56")
+    p = Problem("tables", "tables:7x8", BinaryOp("7", "×", "8"), "56")
     assert gen.check(p, "56")
 
 
 def test_check_strips_whitespace() -> None:
     gen = TablesGenerator(TablesParams())
-    p = Problem("tables", "tables:7x8", "7 × 8", "56")
+    p = Problem("tables", "tables:7x8", BinaryOp("7", "×", "8"), "56")
     assert gen.check(p, "  56 ")
     assert gen.check(p, "\t56\n")
 
 
 def test_check_rejects_wrong_number() -> None:
     gen = TablesGenerator(TablesParams())
-    p = Problem("tables", "tables:7x8", "7 × 8", "56")
+    p = Problem("tables", "tables:7x8", BinaryOp("7", "×", "8"), "56")
     assert not gen.check(p, "55")
     assert not gen.check(p, "57")
     assert not gen.check(p, "0")
@@ -115,14 +116,14 @@ def test_check_rejects_wrong_number() -> None:
 
 def test_check_rejects_empty() -> None:
     gen = TablesGenerator(TablesParams())
-    p = Problem("tables", "tables:7x8", "7 × 8", "56")
+    p = Problem("tables", "tables:7x8", BinaryOp("7", "×", "8"), "56")
     assert not gen.check(p, "")
     assert not gen.check(p, "   ")
 
 
 def test_check_rejects_non_numeric() -> None:
     gen = TablesGenerator(TablesParams())
-    p = Problem("tables", "tables:7x8", "7 × 8", "56")
+    p = Problem("tables", "tables:7x8", BinaryOp("7", "×", "8"), "56")
     assert not gen.check(p, "abc")
     # Decimais são rejeitados — tabuada é sempre inteiro.
     assert not gen.check(p, "5.6")
@@ -134,7 +135,7 @@ def test_check_accepts_negative_when_expected_is_negative() -> None:
     # mas o parser deve aceitar sinal para futuros módulos que usem o
     # mesmo mecanismo de comparação inteira.
     gen = TablesGenerator(TablesParams())
-    p = Problem("tables", "tables:neg", "prompt", "-12")
+    p = Problem("tables", "tables:neg", Term("prompt"), "-12")
     assert gen.check(p, "-12")
 
 
