@@ -113,7 +113,7 @@ contrato de `DrillSession` deve respeitar a mesma restrição.
   em 3.14). Sintaxe PEP 758 (`except A, B:`) é válida e ruff format a
   aplica.
 - Toda mudança de código deve passar antes de commit:
-  - `pytest` (atualmente 148 testes, todos devem passar)
+  - `pytest` (atualmente 161 testes, todos devem passar)
   - `ruff check src tests`
   - `ruff format --check src tests`
   - `mypy` strict em `src/mentat` + `tests/` (config em `pyproject.toml`).
