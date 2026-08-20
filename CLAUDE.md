@@ -1,4 +1,4 @@
-# CLAUDE.md — projeto `aitken`
+# CLAUDE.md — projeto `mentat`
 
 Instruções de escopo local ao projeto. A `CLAUDE.md` do vault (um nível
 acima) trata apenas das notas Obsidian — não se aplica ao código aqui.
@@ -37,7 +37,7 @@ Implementação (separação política/mecanismo, espelhando o retry):
 - *Mecanismo* em `core`: `Generator.next` recebe
   `exclude: AbstractSet[str] = frozenset()` e amostra via
   `weighted_choice(rng, keys, weights, *, exclude)` em
-  `src/aitken/core/scheduler.py`, que filtra as chaves excluídas **antes**
+  `src/mentat/core/scheduler.py`, que filtra as chaves excluídas **antes**
   do `rng.choices`. Filtrar a chave (não zerar o peso) é obrigatório:
   chave ausente em `weights` recebe peso *máximo*
   (`sampling_weight(None)`), então omiti-la a priorizaria, não a
@@ -48,7 +48,7 @@ Não adicionar flag para desligar a regra sem solicitação explícita.
 
 ## Política padrão de drills: SM-2 ponderado por latência
 
-Todo drill amostra pelo scheduler SM-2 de `src/aitken/core/scheduler.py`.
+Todo drill amostra pelo scheduler SM-2 de `src/mentat/core/scheduler.py`.
 O ciclo:
 
 1. `DrillSession.__init__` carrega `dict[str, Card]` via
@@ -62,7 +62,7 @@ O ciclo:
    (caminho de recall failure → zera streak, EF cai 0.2). Persiste via
    `ScheduleRepo.upsert` se o repo existe.
 
-Contrato do `Generator` (`src/aitken/core/generators/base.py`):
+Contrato do `Generator` (`src/mentat/core/generators/base.py`):
 
 - `next(rng, *, weights=None, exclude=frozenset()) -> Problem`
 - `all_keys() -> Sequence[str]`
@@ -75,8 +75,8 @@ flag para desligar SM-2 sem solicitação explícita.
 ## Estrutura é `core/`, arranjo é `ui/`
 
 `Problem` carrega uma `expression: Expression` (união fechada
-`Term | BinaryOp` em `src/aitken/core/expression.py`), não uma string já
-formatada. O gerador declara *o que* é o problema; `src/aitken/ui/layout.py`
+`Term | BinaryOp` em `src/mentat/core/expression.py`), não uma string já
+formatada. O gerador declara *o que* é o problema; `src/mentat/ui/layout.py`
 (`Layout`, `render`) decide *como* desenhá-lo. `render` é puro
 (`Expression -> list[str]`) — não imprime, não lê, não conhece `DrillSession`.
 
@@ -94,15 +94,15 @@ ganha os dois layouts de graça. Não formatar prompt em gerador nenhum.
 
 ## O contador `[N/total]` é cromo periférico
 
-O contador nunca compete com a conta. `_format_hud` em `src/aitken/ui/plain.py` o coloca em uma linha só dele nos dois layouts, alinhado à direita da largura do terminal (menos uma coluna de folga, para não armar o wrap adiado dos terminais com auto-margin) e apagado com SGR *faint*.
+O contador nunca compete com a conta. `_format_hud` em `src/mentat/ui/plain.py` o coloca em uma linha só dele nos dois layouts, alinhado à direita da largura do terminal (menos uma coluna de folga, para não armar o wrap adiado dos terminais com auto-margin) e apagado com SGR *faint*.
 
 Ficar fora da linha do cursor não é só estética: o bloco inteiro vai como argumento único de `ask()`, e readline mede a largura do prompt a partir do último `\n`. Escape ANSI na linha em que o usuário digita descontaria colunas e bagunçaria backspace e setas. Qualquer estilo novo no prompt fica nas linhas anteriores.
 
-`src/aitken/ui/style.py` é o único módulo que emite ANSI, e só para *tirar* ênfase — nenhuma informação é codificada em cor, então a saída sem cor não perde nada. `supports_ansi(stream)` decide: só terminal interativo e sem `NO_COLOR` no ambiente. Sem flag de CLI para isso — `NO_COLOR` é a convenção de fato e o projeto evita knobs. Padear antes de colorir é obrigatório: escapes não ocupam coluna na tela mas contam em `len()`, então `rjust` sobre texto já colorido erra o alinhamento.
+`src/mentat/ui/style.py` é o único módulo que emite ANSI, e só para *tirar* ênfase — nenhuma informação é codificada em cor, então a saída sem cor não perde nada. `supports_ansi(stream)` decide: só terminal interativo e sem `NO_COLOR` no ambiente. Sem flag de CLI para isso — `NO_COLOR` é a convenção de fato e o projeto evita knobs. Padear antes de colorir é obrigatório: escapes não ocupam coluna na tela mas contam em `len()`, então `rjust` sobre texto já colorido erra o alinhamento.
 
 ## Feedback nunca revela a resposta correta
 
-`_format_feedback` em `src/aitken/ui/plain.py` emite `x errado (sua: ...)`
+`_format_feedback` em `src/mentat/ui/plain.py` emite `x errado (sua: ...)`
 sem exibir `expected_answer`. Revelar a resposta certa no erro derrota o
 retry — o usuário copiaria e passaria. Qualquer nova UI que implemente o
 contrato de `DrillSession` deve respeitar a mesma restrição.
@@ -116,8 +116,8 @@ contrato de `DrillSession` deve respeitar a mesma restrição.
   - `pytest` (atualmente 148 testes, todos devem passar)
   - `ruff check src tests`
   - `ruff format --check src tests`
-  - `mypy` strict em `src/aitken` + `tests/` (config em `pyproject.toml`).
-- Use a venv do projeto: `.venv/bin/{pytest,ruff,mypy,aitken}`.
+  - `mypy` strict em `src/mentat` + `tests/` (config em `pyproject.toml`).
+- Use a venv do projeto: `.venv/bin/{pytest,ruff,mypy,mentat}`.
 
 ## Arquitetura (invariante)
 
@@ -132,7 +132,7 @@ completos em `README.md`, seção "Implementação detalhada".
 
 ## Localização do banco
 
-`DEFAULT_DB_PATH = <repo>/data/aitken.db` em `config.py`, calculado via
+`DEFAULT_DB_PATH = <repo>/data/mentat.db` em `config.py`, calculado via
 `Path(__file__).resolve().parents[2]`. Decisão: projeto single-user, repo
 vive em pasta sincronizada pelo OneDrive — DB dentro do repo é o caminho
 portátil sem env var, config file ou XDG. `data/.gitignore` preserva a

@@ -4,11 +4,11 @@ from pathlib import Path
 
 import pytest
 
-from aitken.core.expression import BinaryOp, Term
-from aitken.core.problem import Attempt, Problem
-from aitken.core.scheduler import Card
-from aitken.storage.db import open_db
-from aitken.storage.repositories import AttemptRepo, ScheduleRepo
+from mentat.core.expression import BinaryOp, Term
+from mentat.core.problem import Attempt, Problem
+from mentat.core.scheduler import Card
+from mentat.storage.db import open_db
+from mentat.storage.repositories import AttemptRepo, ScheduleRepo
 
 
 @pytest.fixture

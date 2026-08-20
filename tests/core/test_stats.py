@@ -1,8 +1,8 @@
-"""Testes de :func:`aitken.core.stats.summarize`."""
+"""Testes de :func:`mentat.core.stats.summarize`."""
 
-from aitken.core.expression import Term
-from aitken.core.problem import Attempt, Problem
-from aitken.core.stats import summarize
+from mentat.core.expression import Term
+from mentat.core.problem import Attempt, Problem
+from mentat.core.stats import summarize
 
 
 def _attempt(prompt: str, elapsed_ms: int, correct: bool) -> Attempt:

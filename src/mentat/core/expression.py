@@ -1,4 +1,4 @@
-"""Descrição estrutural da expressão de um :class:`~aitken.core.problem.Problem`.
+"""Descrição estrutural da expressão de um :class:`~mentat.core.problem.Problem`.
 
 Um problema não carrega uma string já renderizada: carrega o que ele *é*.
 ``17 × 86`` é uma operação binária com dois operandos e um símbolo; ``17²``
@@ -6,7 +6,7 @@ Um problema não carrega uma string já renderizada: carrega o que ele *é*.
 domínio, não de apresentação — por isso mora em ``core/``.
 
 Como *desenhar* cada forma (horizontal, armada, futuramente outras) é
-decisão da UI e vive em :mod:`aitken.ui.layout`. Manter a estrutura aqui e
+decisão da UI e vive em :mod:`mentat.ui.layout`. Manter a estrutura aqui e
 o arranjo lá é o que permite trocar o layout sem tocar nos geradores, e
 adicionar um gerador sem saber nada sobre renderização.
 

@@ -4,11 +4,11 @@ from random import Random
 
 import pytest
 
-from aitken.core.expression import Term
-from aitken.core.generators.cubes import CubesGenerator, CubesParams
-from aitken.core.generators.factorial import FactorialGenerator
-from aitken.core.generators.squares import SquaresGenerator, SquaresParams
-from aitken.core.problem import Problem
+from mentat.core.expression import Term
+from mentat.core.generators.cubes import CubesGenerator, CubesParams
+from mentat.core.generators.factorial import FactorialGenerator
+from mentat.core.generators.squares import SquaresGenerator, SquaresParams
+from mentat.core.problem import Problem
 
 # ---------- squares ----------
 

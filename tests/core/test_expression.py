@@ -1,4 +1,4 @@
-"""Testes de :mod:`aitken.core.expression` e da property derivada ``Problem.prompt``.
+"""Testes de :mod:`mentat.core.expression` e da property derivada ``Problem.prompt``.
 
 O ponto sensível: ``prompt`` deixou de ser um campo e virou derivado da
 estrutura. Estes testes fixam que a string derivada é *byte a byte* a mesma
@@ -8,12 +8,12 @@ uma mudança silenciosa de formato quebraria a continuidade do histórico.
 
 from random import Random
 
-from aitken.core.expression import BinaryOp, Term
-from aitken.core.generators.cubes import CubesGenerator, CubesParams
-from aitken.core.generators.factorial import FactorialGenerator
-from aitken.core.generators.squares import SquaresGenerator, SquaresParams
-from aitken.core.generators.tables import TablesGenerator, TablesParams
-from aitken.core.problem import Problem
+from mentat.core.expression import BinaryOp, Term
+from mentat.core.generators.cubes import CubesGenerator, CubesParams
+from mentat.core.generators.factorial import FactorialGenerator
+from mentat.core.generators.squares import SquaresGenerator, SquaresParams
+from mentat.core.generators.tables import TablesGenerator, TablesParams
+from mentat.core.problem import Problem
 
 
 def test_term_inline_is_its_own_text() -> None:

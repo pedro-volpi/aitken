@@ -8,7 +8,7 @@ backend de persistência, apenas ``storage/`` muda.
 import sqlite3
 from pathlib import Path
 
-from aitken.storage.migrations import migrate
+from mentat.storage.migrations import migrate
 
 
 def open_db(path: Path) -> sqlite3.Connection:

@@ -13,9 +13,9 @@ from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
 from random import Random
 
-from aitken.core.expression import Term
-from aitken.core.problem import Problem
-from aitken.core.scheduler import weighted_choice
+from mentat.core.expression import Term
+from mentat.core.problem import Problem
+from mentat.core.scheduler import weighted_choice
 
 
 @dataclass(frozen=True, slots=True)

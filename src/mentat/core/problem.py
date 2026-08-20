@@ -7,14 +7,14 @@ UI de terminal por TUI/GUI não muda nada aqui.
 - :class:`Problem` — um item apresentável ao usuário. Gerado por um módulo
   (ex.: ``tables``), identificado por uma ``key`` canônica estável entre
   sessões para agregação de estatísticas. Carrega a estrutura da expressão
-  (:mod:`aitken.core.expression`), não uma string já formatada.
+  (:mod:`mentat.core.expression`), não uma string já formatada.
 - :class:`Attempt` — a tentativa do usuário em resposta a um ``Problem``,
   com latência medida e veredito de correção.
 """
 
 from dataclasses import dataclass
 
-from aitken.core.expression import Expression
+from mentat.core.expression import Expression
 
 
 @dataclass(frozen=True, slots=True)
@@ -27,7 +27,7 @@ class Problem:
             problemas que devem compartilhar histórico (ex.: ``7 × 8`` e
             ``8 × 7`` sob ``commutative_pairs=True``) têm a mesma ``key``.
         expression: descrição *estrutural* do que é o problema (ver
-            :mod:`aitken.core.expression`). O gerador declara a estrutura;
+            :mod:`mentat.core.expression`). O gerador declara a estrutura;
             a UI decide o arranjo (horizontal, armado, ...).
         expected_answer: forma canônica da resposta correta, em string
             (a verificação é delegada ao gerador, que sabe como interpretar

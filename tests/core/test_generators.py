@@ -9,9 +9,9 @@ from random import Random
 
 import pytest
 
-from aitken.core.expression import BinaryOp, Term
-from aitken.core.generators.tables import TablesGenerator, TablesParams
-from aitken.core.problem import Problem
+from mentat.core.expression import BinaryOp, Term
+from mentat.core.generators.tables import TablesGenerator, TablesParams
+from mentat.core.problem import Problem
 
 
 def _split_prompt(prompt: str) -> tuple[int, int]:

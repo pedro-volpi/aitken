@@ -14,7 +14,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from statistics import median, quantiles
 
-from aitken.core.problem import Attempt
+from mentat.core.problem import Attempt
 
 
 @dataclass(frozen=True, slots=True)

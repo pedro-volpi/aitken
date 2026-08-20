@@ -1,4 +1,4 @@
-# aitken
+# mentat
 
 Treinador de aritmética mental com foco em **fluência por latência**, não só acerto. Inspirado nas técnicas de calculadores profissionais (Aitken, Benjamin, Lemaire): cálculo da esquerda para a direita, criss-cross, close-together, diagnóstico de pares lentos da tabuada e repetição espaçada ponderada por tempo de resposta.
 
@@ -21,17 +21,17 @@ pip install -e ".[dev]"
 ## Uso
 
 ```bash
-aitken drill tables                              # tabuada (default: 30 problemas, faixa 2-9)
-aitken drill tables --min 2 --max 19             # tabuada estendida
-aitken drill squares                             # quadrados (default: 11² a 25²; 2²-10² já saem da tabuada)
-aitken drill cubes                               # cubos (default: 3³ a 10³)
-aitken drill factorial                           # fatoriais de 0! a 10! (faixa fixa)
-aitken drill tables --layout horizontal          # `17 × 86` em vez da conta armada
+mentat drill tables                              # tabuada (default: 30 problemas, faixa 2-9)
+mentat drill tables --min 2 --max 19             # tabuada estendida
+mentat drill squares                             # quadrados (default: 11² a 25²; 2²-10² já saem da tabuada)
+mentat drill cubes                               # cubos (default: 3³ a 10³)
+mentat drill factorial                           # fatoriais de 0! a 10! (faixa fixa)
+mentat drill tables --layout horizontal          # `17 × 86` em vez da conta armada
 ```
 
 ### Parâmetros comuns a todo drill
 
-Todos os subcomandos `aitken drill <módulo>` aceitam as mesmas flags de sessão:
+Todos os subcomandos `mentat drill <módulo>` aceitam as mesmas flags de sessão:
 
 - `--count N` / `-n N` — número de problemas *distintos* a dominar (default 30; `factorial` usa 20 por ter pool menor).
 - `--no-persist` — não grava tentativas nem o estado SM-2 desta sessão.
@@ -63,15 +63,15 @@ Além dos parâmetros comuns, `tables`, `squares` e `cubes` expõem flags própr
 | `--include-trivial` | `tables`, `squares`, `cubes` | exclui triviais | Passar a flag mantém os casos triviais no pool: `×0`/`×1` na tabuada, `0²`/`1²` em quadrados, `0³`/`1³` em cubos. Por default ficam fora porque não exercitam cálculo mental — sabê-los ≠ treiná-los. |
 | `--no-commutative` | `tables` | agrupa comutativos | Por default, `7×8` e `8×7` compartilham a chave SM-2 canônica `tables:7x8`, o que significa **mesmo `Card`, mesmo estado de aprendizado** — acertar um conta como reforço do outro. Passar a flag separa em duas chaves distintas (`tables:7x8` e `tables:8x7`) e faz o SM-2 tratá-los como itens independentes. Útil apenas se você considera que a ordem de apresentação altera a dificuldade cognitiva e quer medir cada lado em separado. |
 
-Cada flag também aparece em `aitken drill <módulo> --help` com a mesma descrição resumida.
+Cada flag também aparece em `mentat drill <módulo> --help` com a mesma descrição resumida.
 
 ### Onde fica o banco
 
-O histórico é gravado em `data/aitken.db`, dentro do próprio repositório. Como o projeto vive numa pasta sincronizada pelo OneDrive, o banco viaja entre máquinas sem precisar de export, env var ou config file — clonou a pasta, já tem o histórico.
+O histórico é gravado em `data/mentat.db`, dentro do próprio repositório. Como o projeto vive numa pasta sincronizada pelo OneDrive, o banco viaja entre máquinas sem precisar de export, env var ou config file — clonou a pasta, já tem o histórico.
 
 A flag `--db PATH` existe como escape hatch para apontar a sessão para um arquivo alternativo (usada principalmente pelos testes para isolar `tmp_path`).
 
-Outros módulos planejados (multidígito, atalhos) e `aitken diagnostic` estão listados em [Funcionalidades](#funcionalidades).
+Outros módulos planejados (multidígito, atalhos) e `mentat diagnostic` estão listados em [Funcionalidades](#funcionalidades).
 
 
 ## Funcionalidades
@@ -85,15 +85,15 @@ Linhas marcadas com ✗ são planejadas — o nome exato do comando pode mudar q
 
 | Funcionalidade | Descrição | Como chamar | Implementado |
 | --- | --- | --- | --- |
-| Treino de tabuada | Sessão cronometrada de multiplicações na faixa configurada (padrão 2-9, estensível até qualquer inteiro). Amostragem por SM-2 + retry-on-wrong. Aceita `--min`, `--max`, `--include-trivial`, `--no-commutative` além dos [parâmetros comuns](#par%C3%A2metros-comuns-a-todo-drill). | `aitken drill tables` | ✓ |
-| Treino de quadrados | Sessão de `N²` para `N` em `[--min, --max]` (default 11–25; `2²` a `10²` já saem da tabuada, daí o corte). Aceita `--min`, `--max`, `--include-trivial`. | `aitken drill squares` | ✓ |
-| Treino de cubos | Sessão de `N³` para `N` em `[--min, --max]` (default 3–10; `2³ = 8` é trivial). Aceita `--min`, `--max`, `--include-trivial`. | `aitken drill cubes` | ✓ |
-| Treino de fatoriais | Sessão de `N!` com `N` sorteado no pool fixo `{0, 1, ..., 10}` — sem parâmetros de faixa. | `aitken drill factorial` | ✓ |
+| Treino de tabuada | Sessão cronometrada de multiplicações na faixa configurada (padrão 2-9, estensível até qualquer inteiro). Amostragem por SM-2 + retry-on-wrong. Aceita `--min`, `--max`, `--include-trivial`, `--no-commutative` além dos [parâmetros comuns](#par%C3%A2metros-comuns-a-todo-drill). | `mentat drill tables` | ✓ |
+| Treino de quadrados | Sessão de `N²` para `N` em `[--min, --max]` (default 11–25; `2²` a `10²` já saem da tabuada, daí o corte). Aceita `--min`, `--max`, `--include-trivial`. | `mentat drill squares` | ✓ |
+| Treino de cubos | Sessão de `N³` para `N` em `[--min, --max]` (default 3–10; `2³ = 8` é trivial). Aceita `--min`, `--max`, `--include-trivial`. | `mentat drill cubes` | ✓ |
+| Treino de fatoriais | Sessão de `N!` com `N` sorteado no pool fixo `{0, 1, ..., 10}` — sem parâmetros de faixa. | `mentat drill factorial` | ✓ |
 | Conta armada | Operações binárias são apresentadas empilhadas, com as casas alinhadas (unidade sob unidade). `--layout horizontal` volta à leitura em uma linha. Módulos unários (`N²`, `N³`, `N!`) são sempre de uma linha. | comum a todo `drill`, via `--layout` | ✓ |
-| Histórico persistente | Cada tentativa é gravada na tabela `attempts` e o estado SM-2 (`ease_factor`, streak de acertos) por chave em `schedule`. Banco em SQLite dentro do projeto (`data/aitken.db`). Para análise ad-hoc, o banco é consultável direto com `sqlite3` ou qualquer ferramenta SQL. | automático em qualquer `drill` (desabilitável com `--no-persist`) | ✓ |
-| Treino multidígito | Multiplicações 2d×1d, 2d×2d, 3d×1d, 3d×2d, 3d×3d. | `aitken drill multidigit` | ✗ |
-| Treino de atalhos | Operações com atalhos mentais: ×11, ×25, ×125, (10a+5)². | `aitken drill tricks` | ✗ |
-| Diagnóstico de fraquezas | Bateria de 100 pares aleatórios; produz mapa dos pares mais lentos, estatísticas agregadas de latência (mediana, p90) e gráficos semanais de evolução (matplotlib). | `aitken diagnostic` | ✗ |
+| Histórico persistente | Cada tentativa é gravada na tabela `attempts` e o estado SM-2 (`ease_factor`, streak de acertos) por chave em `schedule`. Banco em SQLite dentro do projeto (`data/mentat.db`). Para análise ad-hoc, o banco é consultável direto com `sqlite3` ou qualquer ferramenta SQL. | automático em qualquer `drill` (desabilitável com `--no-persist`) | ✓ |
+| Treino multidígito | Multiplicações 2d×1d, 2d×2d, 3d×1d, 3d×2d, 3d×3d. | `mentat drill multidigit` | ✗ |
+| Treino de atalhos | Operações com atalhos mentais: ×11, ×25, ×125, (10a+5)². | `mentat drill tricks` | ✗ |
+| Diagnóstico de fraquezas | Bateria de 100 pares aleatórios; produz mapa dos pares mais lentos, estatísticas agregadas de latência (mediana, p90) e gráficos semanais de evolução (matplotlib). | `mentat diagnostic` | ✗ |
 
 
 ## Arquitetura
@@ -114,7 +114,7 @@ ui/  →  session/  →  storage/
 
 ## Implementação detalhada
 
-Esta seção expande o diagrama de quatro camadas seguindo uma sessão real — `aitken drill tables --count 30` — da linha de comando até o `INSERT` no SQLite, e termina com um grafo `dot` das chamadas. O objetivo é que um leitor novo consiga abrir qualquer arquivo do projeto sabendo em que papel ele entra.
+Esta seção expande o diagrama de quatro camadas seguindo uma sessão real — `mentat drill tables --count 30` — da linha de comando até o `INSERT` no SQLite, e termina com um grafo `dot` das chamadas. O objetivo é que um leitor novo consiga abrir qualquer arquivo do projeto sabendo em que papel ele entra.
 
 ### Camadas e responsabilidades
 
@@ -130,24 +130,24 @@ A camada **`ui/`** é o único lugar onde existem `input()`, `print()` e `time.p
 
 Seis dataclasses formam o vocabulário compartilhado entre as camadas:
 
-- **`Problem`** (`src/aitken/core/problem.py`) — `module_id`, `key` canônica (ex.: `tables:7x8` agrupa estatisticamente 7×8 e 8×7 quando `commutative_pairs=True`), `expression` estrutural, `expected_answer` em string. `prompt` não é campo: é `@property` derivada de `expression.inline()`, para que a forma canônica de uma linha (a que vai para o banco e para o resumo) nunca possa divergir da estrutura.
-- **`Expression`** (`src/aitken/core/expression.py`) — união fechada `Term | BinaryOp`. `Term("17²")` é atômico; `BinaryOp("17", "×", "86")` preserva os operandos e o símbolo em separado. O gerador declara *o que* é a expressão; `ui/layout.py` decide *como* desenhá-la. Sem isso a UI receberia uma string já formatada e não teria como armar a conta.
-- **`Attempt`** (`src/aitken/core/problem.py`) — `problem`, `user_answer`, `correct`, `elapsed_ms`. É o que entra na tabela `attempts`.
-- **`TablesParams`** (`src/aitken/core/generators/tables.py`) — `frozen=True` com `__post_init__` validando faixas. Frozen porque parâmetros circulam entre threads e módulos; mutação silenciosa nunca é o que o usuário quer.
-- **`SessionSummary`** (`src/aitken/core/stats.py`) — `total`, `correct`, `accuracy`, `median_ms`, `p90_ms` (ou `None` se `total < 10`), `slowest`.
-- **`Card`** (`src/aitken/core/scheduler.py`) — estado SM-2 por chave: `ease_factor` (partida em 2.5, piso em 1.3) e `consecutive_correct`. Persistido na tabela `schedule`.
+- **`Problem`** (`src/mentat/core/problem.py`) — `module_id`, `key` canônica (ex.: `tables:7x8` agrupa estatisticamente 7×8 e 8×7 quando `commutative_pairs=True`), `expression` estrutural, `expected_answer` em string. `prompt` não é campo: é `@property` derivada de `expression.inline()`, para que a forma canônica de uma linha (a que vai para o banco e para o resumo) nunca possa divergir da estrutura.
+- **`Expression`** (`src/mentat/core/expression.py`) — união fechada `Term | BinaryOp`. `Term("17²")` é atômico; `BinaryOp("17", "×", "86")` preserva os operandos e o símbolo em separado. O gerador declara *o que* é a expressão; `ui/layout.py` decide *como* desenhá-la. Sem isso a UI receberia uma string já formatada e não teria como armar a conta.
+- **`Attempt`** (`src/mentat/core/problem.py`) — `problem`, `user_answer`, `correct`, `elapsed_ms`. É o que entra na tabela `attempts`.
+- **`TablesParams`** (`src/mentat/core/generators/tables.py`) — `frozen=True` com `__post_init__` validando faixas. Frozen porque parâmetros circulam entre threads e módulos; mutação silenciosa nunca é o que o usuário quer.
+- **`SessionSummary`** (`src/mentat/core/stats.py`) — `total`, `correct`, `accuracy`, `median_ms`, `p90_ms` (ou `None` se `total < 10`), `slowest`.
+- **`Card`** (`src/mentat/core/scheduler.py`) — estado SM-2 por chave: `ease_factor` (partida em 2.5, piso em 1.3) e `consecutive_correct`. Persistido na tabela `schedule`.
 
 ### Cadeia de execução de um comando
 
 Considere:
 
 ```bash
-aitken drill tables --count 30
+mentat drill tables --count 30
 ```
 
 **Parsing (`ui/` entrando em `cli.py`)**
 
-1. O console script `aitken` (registrado em `[project.scripts]` do `pyproject.toml`) chama `aitken.cli:main(argv)`.
+1. O console script `mentat` (registrado em `[project.scripts]` do `pyproject.toml`) chama `mentat.cli:main(argv)`.
 2. `main` monta o parser via `build_parser()`: subparser `drill` → sub-subparser `tables` configurado em `_add_tables_subparser`.
 3. `parser.parse_args(argv)` retorna um `Namespace` onde `args.func` já aponta para `cmd_drill_tables` (via `p.set_defaults(func=...)`). Esse truque dispensa `if/elif` na `main` — adicionar um novo módulo é só registrar mais um subparser.
 4. `main` chama `args.func(args)`. `ValueError` levantado em qualquer camada é capturado aqui e convertido em mensagem no `stderr` com `rc=1`; demais exceções propagam com stack trace.
@@ -180,12 +180,12 @@ aitken drill tables --count 30
 Arestas sólidas são chamadas diretas; arestas tracejadas mostram o dado retornado/passado entre camadas. Clusters reproduzem as quatro camadas da arquitetura. GitHub não renderiza DOT — para ver o grafo, cole o bloco em `dot -Tsvg` ou em <https://dreampuf.github.io/GraphvizOnline>.
 
 ```dot
-digraph aitken_call_chain {
+digraph mentat_call_chain {
   rankdir=LR;
   node [shape=box, fontname="Helvetica", fontsize=10];
   edge [fontname="Helvetica", fontsize=9];
 
-  entry [label="console_script\n(aitken)", shape=oval];
+  entry [label="console_script\n(mentat)", shape=oval];
 
   subgraph cluster_ui {
     label="ui/"; style=filled; fillcolor="#f0f4ff";
@@ -267,15 +267,15 @@ A assinatura é `plain.run(session, *, output: TextIO | None = None, input_fn: C
 
 O bloco do problema (contador, operandos, `= `) é montado por `_format_prompt` e entregue **inteiro** como argumento único de `ask()`: `input()` aceita prompt multilinha, imprime tudo e lê na última linha. Isso mantém a cronometragem em um par `perf_counter` só e preserva o contrato de que `input_fn` recebe exatamente o que o usuário viu — o que também é o que torna os fakes dos testes capazes de derivar a resposta do prompt nos dois layouts.
 
-O arranjo em si mora em `src/aitken/ui/layout.py` (`Layout`, `render`), separado de `plain.py`: `render` é uma função pura `Expression -> list[str]` que não imprime nem lê, e qualquer UI futura reaproveita o mesmo desenho.
+O arranjo em si mora em `src/mentat/ui/layout.py` (`Layout`, `render`), separado de `plain.py`: `render` é uma função pura `Expression -> list[str]` que não imprime nem lê, e qualquer UI futura reaproveita o mesmo desenho.
 
 ### Persistência opcional
 
-`--no-persist` passa `repo=None` para `DrillSession`. Dentro de `record`, o teste é literal: `if self._repo is not None: self._repo.record(attempt)`. Não há `NullRepo`, nem `MemoryRepo` — um `None` bem checado evita uma hierarquia inteira. E como `migrate(conn)` é idempotente, rodar `aitken` em uma máquina nova cria o banco e o schema sem passos manuais; rodar de novo não faz nada.
+`--no-persist` passa `repo=None` para `DrillSession`. Dentro de `record`, o teste é literal: `if self._repo is not None: self._repo.record(attempt)`. Não há `NullRepo`, nem `MemoryRepo` — um `None` bem checado evita uma hierarquia inteira. E como `migrate(conn)` é idempotente, rodar `mentat` em uma máquina nova cria o banco e o schema sem passos manuais; rodar de novo não faz nada.
 
 ### Adicionando um novo gerador
 
-- Implementar o `Protocol` `Generator` em `src/aitken/core/generators/base.py`: atributo `module_id: str`, método `next(rng: Random, *, weights: Mapping[str, float] | None = None, exclude: AbstractSet[str] = frozenset()) -> Problem`, método `all_keys() -> Sequence[str]`, método `check(problem: Problem, user_answer: str) -> bool`. Quando `weights` é passado, o gerador amostra ponderadamente por chave (integração com SM-2); sem pesos, amostragem uniforme. `exclude` carrega as chaves a evitar (política de não-repetição consecutiva) e deve ser honrado via `weighted_choice` — best-effort: ignorado se esvaziaria o pool.
+- Implementar o `Protocol` `Generator` em `src/mentat/core/generators/base.py`: atributo `module_id: str`, método `next(rng: Random, *, weights: Mapping[str, float] | None = None, exclude: AbstractSet[str] = frozenset()) -> Problem`, método `all_keys() -> Sequence[str]`, método `check(problem: Problem, user_answer: str) -> bool`. Quando `weights` é passado, o gerador amostra ponderadamente por chave (integração com SM-2); sem pesos, amostragem uniforme. `exclude` carrega as chaves a evitar (política de não-repetição consecutiva) e deve ser honrado via `weighted_choice` — best-effort: ignorado se esvaziaria o pool.
 - Ao montar cada `Problem`, declarar a `expression`: `BinaryOp(left, operador, right)` para operações de dois operandos (ganha a conta armada de graça) ou `Term(texto)` para termos atômicos. O gerador não escolhe layout nem sabe que layouts existem — só descreve a estrutura.
 - Opcional: um dataclass `frozen=True` de parâmetros com `__post_init__` validador, seguindo `TablesParams`.
 - Em `cli.py`, espelhar `_add_tables_subparser` e escrever um `cmd_*` análogo a `cmd_drill_tables`. Os arquivos de outras camadas não mudam — a `DrillSession` já carrega o estado SM-2 correto para o novo módulo via `schedule_repo.load(generator.module_id)`.
@@ -287,5 +287,5 @@ O arranjo em si mora em `src/aitken/ui/layout.py` (`Layout`, `render`), separado
 pytest                    # testes
 ruff check src tests      # lint
 ruff format src tests     # formatação
-mypy src/aitken           # tipos
+mypy src/mentat           # tipos
 ```

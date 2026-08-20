@@ -9,7 +9,7 @@ Separação de responsabilidades:
 
 - ``next(rng, *, weights, exclude)`` produz o próximo :class:`Problem`.
   Quando ``weights`` é dado, o gerador faz amostragem ponderada por chave
-  (integração com o scheduler SM-2 em :mod:`aitken.core.scheduler`). Sem
+  (integração com o scheduler SM-2 em :mod:`mentat.core.scheduler`). Sem
   ``weights``, a amostragem é uniforme. ``exclude`` carrega as chaves a
   evitar (política de não-repetição consecutiva da sessão).
 - ``all_keys()`` enumera o universo de chaves distintas no pool — o
@@ -25,7 +25,7 @@ from collections.abc import Set as AbstractSet
 from random import Random
 from typing import Protocol, runtime_checkable
 
-from aitken.core.problem import Problem
+from mentat.core.problem import Problem
 
 
 @runtime_checkable

@@ -1,9 +1,9 @@
-"""Arranjo visual de uma :mod:`~aitken.core.expression` em linhas de texto.
+"""Arranjo visual de uma :mod:`~mentat.core.expression` em linhas de texto.
 
 Separação deliberada: ``core/`` diz *o que* é a expressão (dois operandos e
 um símbolo, ou um termo atômico); este módulo diz *como* ela ocupa a tela.
 Nenhum gerador sabe que layouts existem, e trocar de layout não altera
-:attr:`~aitken.core.problem.Problem.prompt` — a forma canônica de uma linha
+:attr:`~mentat.core.problem.Problem.prompt` — a forma canônica de uma linha
 que vai para o banco e para o resumo permanece a mesma nos dois modos.
 
 O default é :attr:`Layout.VERTICAL` (conta armada). Alinhar unidade sob
@@ -12,13 +12,13 @@ parcial tem uma coluna própria. A forma horizontal continua disponível para
 quem prefere a leitura compacta.
 
 Este módulo é puro (``Expression -> list[str]``): não imprime, não lê,
-não conhece :class:`~aitken.session.drill.DrillSession`. Quem junta as
-linhas com o contador de posição e o ``= `` é :mod:`aitken.ui.plain`.
+não conhece :class:`~mentat.session.drill.DrillSession`. Quem junta as
+linhas com o contador de posição e o ``= `` é :mod:`mentat.ui.plain`.
 """
 
 from enum import StrEnum
 
-from aitken.core.expression import BinaryOp, Expression, Term
+from mentat.core.expression import BinaryOp, Expression, Term
 
 
 class Layout(StrEnum):
@@ -52,7 +52,7 @@ def render(expression: Expression, layout: Layout) -> list[str]:
 
     Returns:
         As linhas do desenho, sem quebra de linha final. Sempre ao menos
-        uma. No modo vertical de uma :class:`~aitken.core.expression.BinaryOp`
+        uma. No modo vertical de uma :class:`~mentat.core.expression.BinaryOp`
         são duas, de largura idêntica.
 
     Exemplos:

@@ -3,7 +3,7 @@
 A sessão orquestra quatro colaboradores injetados:
 
 - ``generator``: produz problemas e valida respostas (contrato em
-  :class:`aitken.core.generators.base.Generator`).
+  :class:`mentat.core.generators.base.Generator`).
 - ``attempt_repo``: grava o histórico imutável de tentativas. Pode ser
   ``None`` em modo ``--no-persist``.
 - ``schedule_repo``: persiste o estado SM-2 por chave. Pode ser ``None`` —
@@ -35,16 +35,16 @@ par recair durante *esta* sessão, também agora).
 from collections.abc import Iterator
 from random import Random
 
-from aitken.core.generators.base import Generator
-from aitken.core.problem import Attempt, Problem
-from aitken.core.scheduler import (
+from mentat.core.generators.base import Generator
+from mentat.core.problem import Attempt, Problem
+from mentat.core.scheduler import (
     Card,
     quality_from_attempt,
     update_card,
     weights_from_cards,
 )
-from aitken.core.stats import SessionSummary, summarize
-from aitken.storage.repositories import AttemptRepo, ScheduleRepo
+from mentat.core.stats import SessionSummary, summarize
+from mentat.storage.repositories import AttemptRepo, ScheduleRepo
 
 
 class DrillSession:

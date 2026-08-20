@@ -10,7 +10,7 @@ from typing import TextIO, cast
 
 import pytest
 
-from aitken.ui.style import FAINT, RESET, faint, supports_ansi, terminal_width
+from mentat.ui.style import FAINT, RESET, faint, supports_ansi, terminal_width
 
 
 class _FakeTty(io.StringIO):

@@ -4,7 +4,7 @@ from random import Random
 
 import pytest
 
-from aitken.core.scheduler import (
+from mentat.core.scheduler import (
     Card,
     quality_from_attempt,
     sampling_weight,

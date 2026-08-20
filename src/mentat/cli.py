@@ -6,7 +6,7 @@ umas às outras. Todas as outras camadas conversam via interfaces
 
 Adicionar um novo módulo de drill (quadrados, cubos, fatoriais, etc.) é:
 
-1. Implementar o ``Protocol`` em :mod:`aitken.core.generators.base`.
+1. Implementar o ``Protocol`` em :mod:`mentat.core.generators.base`.
 2. Registrar um subparser em ``build_parser`` via um ``_add_<module>_subparser``.
 3. Escrever um ``cmd_drill_<module>(args)`` que constrói o gerador e
    delega a :func:`_run_drill` (que cuida do banco, sessão e UI).
@@ -21,18 +21,18 @@ import sys
 from pathlib import Path
 from random import Random
 
-from aitken import __version__
-from aitken.config import DEFAULT_DB_PATH
-from aitken.core.generators.base import Generator
-from aitken.core.generators.cubes import CubesGenerator, CubesParams
-from aitken.core.generators.factorial import FactorialGenerator
-from aitken.core.generators.squares import SquaresGenerator, SquaresParams
-from aitken.core.generators.tables import TablesGenerator, TablesParams
-from aitken.session.drill import DrillSession
-from aitken.storage.db import open_db
-from aitken.storage.repositories import AttemptRepo, ScheduleRepo
-from aitken.ui import plain
-from aitken.ui.layout import DEFAULT_LAYOUT, Layout
+from mentat import __version__
+from mentat.config import DEFAULT_DB_PATH
+from mentat.core.generators.base import Generator
+from mentat.core.generators.cubes import CubesGenerator, CubesParams
+from mentat.core.generators.factorial import FactorialGenerator
+from mentat.core.generators.squares import SquaresGenerator, SquaresParams
+from mentat.core.generators.tables import TablesGenerator, TablesParams
+from mentat.session.drill import DrillSession
+from mentat.storage.db import open_db
+from mentat.storage.repositories import AttemptRepo, ScheduleRepo
+from mentat.ui import plain
+from mentat.ui.layout import DEFAULT_LAYOUT, Layout
 
 _ROOT_DESCRIPTION = """\
 Treinador CLI de aritmética mental com foco em fluência por latência.
@@ -48,11 +48,11 @@ Módulos de drill disponíveis:
   factorial   Fatoriais N! (pool fixo 0 a 10).
 
 Exemplos:
-  aitken drill tables                            # tabuada padrão, 30 problemas
-  aitken drill tables --min 2 --max 19 -n 40     # tabuada estendida, 40 problemas
-  aitken drill cubes -n 40                       # sessão maior de cubos
-  aitken drill factorial --no-persist            # sessão descartável
-  aitken drill tables --layout horizontal        # 17 × 86 em vez de armado
+  mentat drill tables                            # tabuada padrão, 30 problemas
+  mentat drill tables --min 2 --max 19 -n 40     # tabuada estendida, 40 problemas
+  mentat drill cubes -n 40                       # sessão maior de cubos
+  mentat drill factorial --no-persist            # sessão descartável
+  mentat drill tables --layout horizontal        # 17 × 86 em vez de armado
 
 Flags comuns a todo drill:
   --count/-n N   problemas distintos a dominar
@@ -65,10 +65,10 @@ Por padrão o problema é apresentado armado, com as casas alinhadas:
   × 86
   =
 
-O banco padrão é data/aitken.db dentro do projeto. Use --db PATH para
+O banco padrão é data/mentat.db dentro do projeto. Use --db PATH para
 apontar para outro arquivo (escape hatch; útil para testes).
 
-Ajuda de cada módulo: aitken drill <módulo> --help
+Ajuda de cada módulo: mentat drill <módulo> --help
 """
 
 _DRILL_EPILOG = """\
@@ -89,7 +89,7 @@ módulos unários (N², N³, N!) são sempre apresentados em uma linha.
 def build_parser() -> argparse.ArgumentParser:
     """Constrói e retorna o parser raiz já com todos os subcomandos."""
     parser = argparse.ArgumentParser(
-        prog="aitken",
+        prog="mentat",
         description=_ROOT_DESCRIPTION,
         epilog=_ROOT_EPILOG,
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -98,7 +98,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--version",
         "-V",
         action="version",
-        version=f"aitken {__version__}",
+        version=f"mentat {__version__}",
     )
     subparsers = parser.add_subparsers(
         dest="command",
@@ -160,7 +160,7 @@ def _add_common_drill_args(p: argparse.ArgumentParser, *, default_count: int = 3
         "--db",
         type=Path,
         default=DEFAULT_DB_PATH,
-        help="Banco alternativo; default é data/aitken.db na raiz do projeto.",
+        help="Banco alternativo; default é data/mentat.db na raiz do projeto.",
     )
     p.add_argument(
         "--no-persist",

@@ -1,4 +1,4 @@
-"""Testes de :mod:`aitken.ui.layout` — o arranjo das expressões em linhas.
+"""Testes de :mod:`mentat.ui.layout` — o arranjo das expressões em linhas.
 
 O invariante central da conta armada é o alinhamento: todas as linhas têm a
 mesma largura e as casas se correspondem coluna a coluna (unidade sob
@@ -6,8 +6,8 @@ unidade). Os testes verificam isso tanto pela string literal quanto por
 propriedade, para pegar regressões em operandos de larguras diferentes.
 """
 
-from aitken.core.expression import BinaryOp, Term
-from aitken.ui.layout import DEFAULT_LAYOUT, Layout, render
+from mentat.core.expression import BinaryOp, Term
+from mentat.ui.layout import DEFAULT_LAYOUT, Layout, render
 
 
 def test_default_layout_is_vertical() -> None:

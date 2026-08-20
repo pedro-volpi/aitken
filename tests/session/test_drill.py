@@ -5,11 +5,11 @@ from random import Random
 
 import pytest
 
-from aitken.core.generators.squares import SquaresGenerator, SquaresParams
-from aitken.core.generators.tables import TablesGenerator, TablesParams
-from aitken.session.drill import DrillSession
-from aitken.storage.db import open_db
-from aitken.storage.repositories import AttemptRepo, ScheduleRepo
+from mentat.core.generators.squares import SquaresGenerator, SquaresParams
+from mentat.core.generators.tables import TablesGenerator, TablesParams
+from mentat.session.drill import DrillSession
+from mentat.storage.db import open_db
+from mentat.storage.repositories import AttemptRepo, ScheduleRepo
 
 
 def _session(

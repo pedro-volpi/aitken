@@ -1,6 +1,6 @@
 """Adaptador de UI em texto puro (``input()``/``print()``).
 
-Este módulo é um *driver* de :class:`~aitken.session.drill.DrillSession`
+Este módulo é um *driver* de :class:`~mentat.session.drill.DrillSession`
 que traduz o contrato da sessão em interação de terminal: imprime o
 prompt, cronometra a digitação e repassa à sessão.
 
@@ -22,11 +22,11 @@ import time
 from collections.abc import Callable
 from typing import TextIO
 
-from aitken.core.problem import Attempt, Problem
-from aitken.core.stats import SessionSummary
-from aitken.session.drill import DrillSession
-from aitken.ui.layout import DEFAULT_LAYOUT, Layout, render
-from aitken.ui.style import faint, supports_ansi, terminal_width
+from mentat.core.problem import Attempt, Problem
+from mentat.core.stats import SessionSummary
+from mentat.session.drill import DrillSession
+from mentat.ui.layout import DEFAULT_LAYOUT, Layout, render
+from mentat.ui.style import faint, supports_ansi, terminal_width
 
 InputFn = Callable[[str], str]
 
@@ -48,7 +48,7 @@ def run(
             ``None`` (resolve para :func:`builtins.input` em tempo de
             chamada — necessário para que ``patch("builtins.input", ...)``
             em testes tenha efeito).
-        layout: disposição do problema na tela (ver :mod:`aitken.ui.layout`);
+        layout: disposição do problema na tela (ver :mod:`mentat.ui.layout`);
             padrão conta armada.
 
     Returns:
@@ -150,7 +150,7 @@ def _format_prompt(
 def _format_hud(position: int, total: int, *, width: int, styled: bool) -> str:
     """Formata o contador de posição como cromo periférico.
 
-    O ``rjust`` acontece **antes** do :func:`~aitken.ui.style.faint`: os
+    O ``rjust`` acontece **antes** do :func:`~mentat.ui.style.faint`: os
     escapes ANSI não ocupam coluna nenhuma na tela, mas contam em ``len()``,
     então padear o texto já colorido empurraria o contador para longe da
     borda direita.

@@ -15,8 +15,8 @@ Dois repositórios hoje:
 import sqlite3
 from datetime import UTC, datetime
 
-from aitken.core.problem import Attempt
-from aitken.core.scheduler import Card
+from mentat.core.problem import Attempt
+from mentat.core.scheduler import Card
 
 
 class AttemptRepo:

@@ -11,16 +11,16 @@ import re
 from pathlib import Path
 from random import Random
 
-from aitken.core.expression import BinaryOp, Term
-from aitken.core.generators.squares import SquaresGenerator, SquaresParams
-from aitken.core.generators.tables import TablesGenerator, TablesParams
-from aitken.core.problem import Problem
-from aitken.session.drill import DrillSession
-from aitken.storage.db import open_db
-from aitken.storage.repositories import AttemptRepo
-from aitken.ui.layout import Layout
-from aitken.ui.plain import _format_hud, _format_prompt, run
-from aitken.ui.style import FAINT, RESET
+from mentat.core.expression import BinaryOp, Term
+from mentat.core.generators.squares import SquaresGenerator, SquaresParams
+from mentat.core.generators.tables import TablesGenerator, TablesParams
+from mentat.core.problem import Problem
+from mentat.session.drill import DrillSession
+from mentat.storage.db import open_db
+from mentat.storage.repositories import AttemptRepo
+from mentat.ui.layout import Layout
+from mentat.ui.plain import _format_hud, _format_prompt, run
+from mentat.ui.style import FAINT, RESET
 
 _PROMPT_RE = re.compile(r"(\d+)\s*×\s*(\d+)")
 

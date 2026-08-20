@@ -7,8 +7,8 @@ from unittest.mock import patch
 
 import pytest
 
-from aitken.cli import build_parser, main
-from aitken.ui.layout import Layout
+from mentat.cli import build_parser, main
+from mentat.ui.layout import Layout
 
 _PROMPT_RE = re.compile(r"(\d+)\s*×\s*(\d+)")
 

@@ -12,7 +12,7 @@ reprodutíveis quando a seed é fixada.
 
 Suporta amostragem uniforme (``next(rng)``) e ponderada (``next(rng,
 weights=...)``), esta última usada pelo scheduler SM-2 para priorizar
-pares com baixa facilidade. Ver :mod:`aitken.core.scheduler`.
+pares com baixa facilidade. Ver :mod:`mentat.core.scheduler`.
 """
 
 from collections.abc import Mapping, Sequence
@@ -20,9 +20,9 @@ from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
 from random import Random
 
-from aitken.core.expression import BinaryOp
-from aitken.core.problem import Problem
-from aitken.core.scheduler import weighted_choice
+from mentat.core.expression import BinaryOp
+from mentat.core.problem import Problem
+from mentat.core.scheduler import weighted_choice
 
 
 @dataclass(frozen=True, slots=True)
@@ -112,7 +112,7 @@ class TablesGenerator:
         Sem ``weights``, usa amostragem por rejeição uniforme (filtrando
         pares triviais). Com ``weights``, escolhe entre :meth:`all_keys`
         proporcionalmente ao peso — chaves ausentes recebem o peso padrão
-        de :func:`aitken.core.scheduler.sampling_weight` para ``None``.
+        de :func:`mentat.core.scheduler.sampling_weight` para ``None``.
         ``exclude`` evita repetir a chave canônica anterior (best-effort):
         ``7 × 8`` e ``8 × 7`` compartilham chave, logo nenhum dos dois
         reaparece logo após o outro.
