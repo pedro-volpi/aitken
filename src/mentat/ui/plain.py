@@ -9,16 +9,27 @@ implementa uma função análoga a :func:`run` que consuma a mesma sessão
 via iteração + ``record()``. As camadas ``core/``, ``storage/`` e
 ``session/`` ficam intocadas quando a UI muda.
 
-A cronometragem usa :func:`time.perf_counter` (monotônico, alta
-resolução) — precisão de microssegundos no relógio, mas a latência
-efetiva é dominada pelo tempo de digitação e pelo newline do terminal,
-da ordem de 50–100 ms. Para drills cuja latência alvo é ≥ 1 s (toda a
-tabuada), essa margem é irrelevante.
+A cronometragem é delegada inteira a
+:class:`~mentat.ui.timer.PracticeTimer`, que mede tempo *ativo* de prática
+sobre :func:`time.monotonic`: o que a UI grava em ``elapsed_ms`` é sempre
+a diferença entre duas leituras do mesmo cronômetro, então um intervalo
+pausado desaparece da latência sem que o caminho de gravação precise saber
+que a pausa existe. A resolução do relógio é de microssegundos, mas a
+latência efetiva é dominada pelo tempo de digitação e pelo newline do
+terminal, da ordem de 50–100 ms. Para drills cuja latência alvo é ≥ 1 s
+(toda a tabuada), essa margem é irrelevante.
+
+**Pausa**: como o processo fica bloqueado dentro de ``input()`` durante
+toda a questão e o readline engole cada tecla até o Enter, não existe
+tecla solta disponível — o comando é uma linha-sentinela (``p`` ou
+``pause``, ver :data:`_PAUSE_COMMANDS`). Pelo mesmo motivo o relógio do
+HUD é repintado a cada prompt (questão nova, retry, pausa, retomada) em
+vez de correr continuamente: não há event loop onde um tique caberia, e
+uma thread repintando por cima do readline bagunçaria a edição da linha.
 """
 
 import builtins
 import sys
-import time
 from collections.abc import Callable
 from typing import TextIO
 
@@ -27,8 +38,20 @@ from mentat.core.stats import SessionSummary
 from mentat.session.drill import DrillSession
 from mentat.ui.layout import DEFAULT_LAYOUT, Layout, render
 from mentat.ui.style import faint, supports_ansi, terminal_width
+from mentat.ui.timer import Clock, PracticeTimer, format_elapsed
 
 InputFn = Callable[[str], str]
+
+_PAUSE_COMMANDS = frozenset({"p", "pause"})
+"""Linhas que alternam a pausa em vez de valerem como resposta.
+
+Nenhuma colide com resposta legítima: todo drill espera um número. Antes
+disso, ``p`` seria só uma resposta errada a mais, reprovada por
+``Generator.check``.
+"""
+
+_PAUSE_HINT = "p + Enter para retomar: "
+"""Linha do cursor enquanto pausado — o prompt em si documenta a saída."""
 
 
 def run(
@@ -37,6 +60,7 @@ def run(
     output: TextIO | None = None,
     input_fn: InputFn | None = None,
     layout: Layout = DEFAULT_LAYOUT,
+    clock: Clock | None = None,
 ) -> SessionSummary:
     """Executa uma sessão inteira com I/O em texto e devolve o resumo.
 
@@ -50,6 +74,10 @@ def run(
             em testes tenha efeito).
         layout: disposição do problema na tela (ver :mod:`mentat.ui.layout`);
             padrão conta armada.
+        clock: fonte de tempo do cronômetro; padrão :func:`time.monotonic`.
+            Injetável para que o teste de pausa seja determinístico sem
+            dormir de verdade — e para que as asserções de prompt exato não
+            fiquem à mercê do relógio.
 
     Returns:
         :class:`SessionSummary` da sessão (mesmo em caso de abandono via
@@ -68,22 +96,24 @@ def run(
     # na borda. Largura lida uma vez — redimensionar vale da próxima sessão.
     styled = supports_ansi(out)
     hud_width = max(terminal_width() - 1, 0) if styled else 0
+    timer = PracticeTimer(clock)
 
     total = session.total_problems
     _print(f"\nSessão: {total} problemas. Digite o resultado e Enter.")
     _print("Respostas erradas são reapresentadas até serem acertadas.")
+    _print("'p' + Enter pausa e retoma o cronômetro.")
     _print("Ctrl-C ou Ctrl-D para abandonar.\n")
 
     for problem in session:
         pos = session.current_position
-        prompt = _format_prompt(problem, pos, total, layout, hud_width=hud_width, styled=styled)
-        start = time.perf_counter()
-        try:
-            answer = ask(prompt)
-        except EOFError, KeyboardInterrupt:
+        started = timer.elapsed
+        answer = _ask_active(
+            ask, timer, problem, pos, total, layout, hud_width=hud_width, styled=styled
+        )
+        if answer is None:
             _print("\nSessão interrompida.")
             break
-        elapsed_ms = int((time.perf_counter() - start) * 1000)
+        elapsed_ms = int((timer.elapsed - started) * 1000)
 
         attempt = session.record(problem, answer, elapsed_ms)
         _print(_format_feedback(attempt))
@@ -95,12 +125,61 @@ def run(
     return summary
 
 
-def _format_prompt(
+def _ask_active(
+    ask: InputFn,
+    timer: PracticeTimer,
     problem: Problem,
     position: int,
     total: int,
     layout: Layout,
     *,
+    hud_width: int,
+    styled: bool,
+) -> str | None:
+    """Lê até vir uma resposta com o cronômetro rodando.
+
+    Concentra aqui o protocolo de pausa para que o laço de :func:`run`
+    continue plano e o caminho de gravação siga sem condicional de pausa.
+    Cada volta repinta o prompt, que é o mecanismo de renderização que o
+    programa já tem — é por isso que o relógio aparece atualizado ao pausar
+    e ao retomar.
+
+    Pausado, só o comando de pausa é aceito: responder com o relógio parado
+    inflaria a estatística ao contrário, já que o tempo de raciocínio teria
+    ficado de fora da medição.
+
+    Returns:
+        A linha digitada, ou ``None`` se o usuário abandonou a sessão.
+    """
+    while True:
+        prompt = _format_prompt(
+            problem,
+            position,
+            total,
+            layout,
+            timer.elapsed,
+            running=timer.running,
+            hud_width=hud_width,
+            styled=styled,
+        )
+        try:
+            entry = ask(prompt)
+        except EOFError, KeyboardInterrupt:
+            return None
+        if entry.strip().lower() in _PAUSE_COMMANDS:
+            timer.toggle()
+        elif timer.running:
+            return entry
+
+
+def _format_prompt(
+    problem: Problem,
+    position: int,
+    total: int,
+    layout: Layout,
+    elapsed: float,
+    *,
+    running: bool = True,
     hud_width: int = 0,
     styled: bool = False,
 ) -> str:
@@ -111,40 +190,62 @@ def _format_prompt(
     em uma só chamada preserva a cronometragem (um começo, um fim) e o
     contrato de que ``input_fn`` recebe exatamente o que foi apresentado.
 
-    O contador ocupa **sempre** uma linha só sua, nos dois layouts, e uma
-    linha em branco separa do feedback do problema anterior. Conta armada::
+    O contador ocupa **sempre** uma linha só sua, nos dois layouts, com o
+    cronômetro logo abaixo, e uma linha em branco separa do feedback do
+    problema anterior. Conta armada::
 
         <blank>
                                                       [3/30]
+                                                    03:27:42
           17
         × 86
         =
 
     Desenho de uma linha (``--layout horizontal``, ou termo atômico como
-    ``13²`` mesmo no vertical) — o contador continua acima, a conta segue
+    ``13²`` mesmo no vertical) — o cabeçalho continua acima, a conta segue
     compacta::
 
         <blank>
                                                       [3/30]
+                                                    03:27:42
         17 × 86 =
 
-    Ter o contador fora da linha do cursor não é só estética: readline mede
+    Pausado, a conta **some** e sobra o cabeçalho com o tempo congelado::
+
+        <blank>
+                                                      [3/30]
+                                           03:27:42 [PAUSADO]
+        p + Enter para retomar:
+
+    Esconder o problema não é enfeite: com ele na tela dava para pausar,
+    resolver sem pressão e retomar, produzindo um ``elapsed_ms`` baixo que
+    envenenaria a mediana da sessão e a *quality* do SM-2. É a mesma
+    política do feedback que nunca revela a resposta certa.
+
+    Ter o cabeçalho fora da linha do cursor não é só estética: readline mede
     a largura do prompt a partir do último ``\\n``, então os escapes ANSI do
-    :func:`_format_hud` ficam em linha anterior e não descontam colunas da
-    edição da resposta. Na conta armada isso também evita desalinhar as
-    colunas dos operandos.
+    :func:`_format_hud` e do :func:`_format_clock` ficam em linhas
+    anteriores e não descontam colunas da edição da resposta. Na conta
+    armada isso também evita desalinhar as colunas dos operandos.
 
     Args:
-        hud_width: largura em que o contador é alinhado à direita. ``0``
+        elapsed: segundos de prática ativa a exibir. Recebe o número, não o
+            cronômetro — a formatação continua pura e testável sozinha.
+        running: ``False`` desenha a variante pausada.
+        hud_width: largura em que o cabeçalho é alinhado à direita. ``0``
             (default) deixa na margem esquerda, sem padding.
-        styled: se o contador sai apagado (ANSI) ou cru.
+        styled: se o cabeçalho sai apagado (ANSI) ou cru.
     """
-    lines = render(problem.expression, layout)
     hud = _format_hud(position, total, width=hud_width, styled=styled)
+    clock = _format_clock(elapsed, running=running, width=hud_width, styled=styled)
+    header = f"\n{hud}\n{clock}"
+    if not running:
+        return f"{header}\n{_PAUSE_HINT}"
+    lines = render(problem.expression, layout)
     if len(lines) == 1:
-        return f"\n{hud}\n{lines[0]} = "
+        return f"{header}\n{lines[0]} = "
     block = "\n".join(lines)
-    return f"\n{hud}\n{block}\n= "
+    return f"{header}\n{block}\n= "
 
 
 def _format_hud(position: int, total: int, *, width: int, styled: bool) -> str:
@@ -163,6 +264,31 @@ def _format_hud(position: int, total: int, *, width: int, styled: bool) -> str:
     """
     hud = f"[{position}/{total}]".rjust(width)
     return faint(hud) if styled else hud
+
+
+def _format_clock(elapsed: float, *, running: bool, width: int, styled: bool) -> str:
+    """Formata a linha do cronômetro, logo abaixo do contador.
+
+    Rodando, é cromo periférico como o contador e sai apagado. Pausado,
+    sai em ênfase normal: o contraste com a linha que estava apagada torna
+    o estado imediatamente óbvio. Ainda assim nenhuma informação está na
+    cor — ``[PAUSADO]`` é literal, e a saída crua não perde nada.
+
+    Mesmo cuidado do :func:`_format_hud`: padear antes de colorir.
+
+    Exemplos:
+        >>> _format_clock(207.42, running=True, width=0, styled=False)
+        '03:27:42'
+        >>> _format_clock(207.42, running=False, width=0, styled=False)
+        '03:27:42 [PAUSADO]'
+    """
+    text = format_elapsed(elapsed)
+    if not running:
+        text = f"{text} [PAUSADO]"
+    padded = text.rjust(width)
+    if not styled or not running:
+        return padded
+    return faint(padded)
 
 
 def _format_feedback(attempt: Attempt) -> str:

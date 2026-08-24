@@ -19,10 +19,32 @@ from mentat.session.drill import DrillSession
 from mentat.storage.db import open_db
 from mentat.storage.repositories import AttemptRepo
 from mentat.ui.layout import Layout
-from mentat.ui.plain import _format_hud, _format_prompt, run
+from mentat.ui.plain import _format_clock, _format_hud, _format_prompt, run
 from mentat.ui.style import FAINT, RESET
 
 _PROMPT_RE = re.compile(r"(\d+)\s*×\s*(\d+)")
+
+
+def _frozen_clock() -> float:
+    """Relógio parado — mantém determinística toda asserção de prompt exato.
+
+    Sem isso o cronômetro no cabeçalho faria cada repinte sair diferente e
+    os testes de "o retry reapresenta o bloco idêntico" ficariam flaky.
+    """
+    return 0.0
+
+
+class _FakeClock:
+    """Relógio monotônico que só anda quando o teste manda."""
+
+    def __init__(self, now: float = 0.0) -> None:
+        self.now = now
+
+    def __call__(self) -> float:
+        return self.now
+
+    def advance(self, seconds: float) -> None:
+        self.now += seconds
 
 
 def _answer_from_prompt(prompt: str) -> str:
@@ -150,7 +172,7 @@ def test_run_repeats_problem_until_correct() -> None:
         return _answer_from_prompt(prompt)
 
     buf = io.StringIO()
-    summary = run(session, output=buf, input_fn=fake)
+    summary = run(session, output=buf, input_fn=fake, clock=_frozen_clock)
 
     assert summary.total == 3
     assert summary.correct == 1
@@ -169,9 +191,9 @@ def test_vertical_layout_is_the_default_block() -> None:
         rng=Random(0),
     )
     fake = _AutoCorrect()
-    run(session, output=io.StringIO(), input_fn=fake)
+    run(session, output=io.StringIO(), input_fn=fake, clock=_frozen_clock)
 
-    assert fake.prompts == ["\n[1/1]\n  7\n× 7\n= "]
+    assert fake.prompts == ["\n[1/1]\n00:00:00\n  7\n× 7\n= "]
 
 
 def test_horizontal_layout_keeps_the_operation_on_one_line() -> None:
@@ -184,9 +206,9 @@ def test_horizontal_layout_keeps_the_operation_on_one_line() -> None:
         rng=Random(0),
     )
     fake = _AutoCorrect()
-    run(session, output=io.StringIO(), input_fn=fake, layout=Layout.HORIZONTAL)
+    run(session, output=io.StringIO(), input_fn=fake, layout=Layout.HORIZONTAL, clock=_frozen_clock)
 
-    assert fake.prompts == ["\n[1/1]\n7 × 7 = "]
+    assert fake.prompts == ["\n[1/1]\n00:00:00\n7 × 7 = "]
 
 
 def test_vertical_layout_aligns_operands_of_different_widths() -> None:
@@ -217,9 +239,9 @@ def test_unary_module_stays_on_one_line_even_in_vertical() -> None:
         rng=Random(0),
     )
     fake = _FakeInput(["169"])
-    run(session, output=io.StringIO(), input_fn=fake, layout=Layout.VERTICAL)
+    run(session, output=io.StringIO(), input_fn=fake, layout=Layout.VERTICAL, clock=_frozen_clock)
 
-    assert fake.prompts == ["\n[1/1]\n13² = "]
+    assert fake.prompts == ["\n[1/1]\n00:00:00\n13² = "]
 
 
 def test_retry_reshows_the_same_block() -> None:
@@ -232,9 +254,9 @@ def test_retry_reshows_the_same_block() -> None:
         rng=Random(0),
     )
     fake = _FakeInput(["1", "49"])
-    run(session, output=io.StringIO(), input_fn=fake)
+    run(session, output=io.StringIO(), input_fn=fake, clock=_frozen_clock)
 
-    assert fake.prompts == ["\n[1/1]\n  7\n× 7\n= "] * 2
+    assert fake.prompts == ["\n[1/1]\n00:00:00\n  7\n× 7\n= "] * 2
 
 
 def test_hud_is_plain_and_flush_left_without_width() -> None:
@@ -263,20 +285,22 @@ def test_prompt_keeps_the_operands_flush_left_while_the_hud_goes_right() -> None
     """Alinhar o contador não pode empurrar a conta armada."""
     problem = Problem("tables", "7x7", BinaryOp("17", "×", "86"), "1462")
 
-    prompt = _format_prompt(problem, 3, 30, Layout.VERTICAL, hud_width=40, styled=False)
+    prompt = _format_prompt(problem, 3, 30, Layout.VERTICAL, 207.42, hud_width=40, styled=False)
 
-    blank, hud, left, right, tail = prompt.splitlines()
+    blank, hud, clock, left, right, tail = prompt.splitlines()
     assert blank == ""
     assert hud == "[3/30]".rjust(40)
+    assert clock == "03:27:42".rjust(40)
     assert (left, right, tail) == ("  17", "× 86", "= ")
 
 
 def test_unary_prompt_also_gets_the_hud_on_its_own_line() -> None:
     problem = Problem("squares", "13", Term("13²"), "169")
 
-    prompt = _format_prompt(problem, 3, 30, Layout.VERTICAL, hud_width=40, styled=False)
+    prompt = _format_prompt(problem, 3, 30, Layout.VERTICAL, 207.42, hud_width=40, styled=False)
 
-    assert prompt == "\n" + "[3/30]".rjust(40) + "\n13² = "
+    expected_header = "\n" + "[3/30]".rjust(40) + "\n" + "03:27:42".rjust(40)
+    assert prompt == expected_header + "\n13² = "
 
 
 def test_ansi_never_lands_on_the_line_the_user_types_in() -> None:
@@ -284,8 +308,11 @@ def test_ansi_never_lands_on_the_line_the_user_types_in() -> None:
     problem = Problem("tables", "7x7", BinaryOp("17", "×", "86"), "1462")
 
     for layout in Layout:
-        prompt = _format_prompt(problem, 3, 30, layout, hud_width=40, styled=True)
-        assert "\x1b" not in prompt.splitlines()[-1]
+        for running in (True, False):
+            prompt = _format_prompt(
+                problem, 3, 30, layout, 207.42, running=running, hud_width=40, styled=True
+            )
+            assert "\x1b" not in prompt.splitlines()[-1]
 
 
 def test_run_writes_no_escapes_when_output_is_not_a_terminal() -> None:
@@ -299,10 +326,10 @@ def test_run_writes_no_escapes_when_output_is_not_a_terminal() -> None:
     )
     fake = _AutoCorrect()
     buf = io.StringIO()
-    run(session, output=buf, input_fn=fake)
+    run(session, output=buf, input_fn=fake, clock=_frozen_clock)
 
     assert "\x1b" not in buf.getvalue()
-    assert fake.prompts == ["\n[1/1]\n  7\n× 7\n= "]
+    assert fake.prompts == ["\n[1/1]\n00:00:00\n  7\n× 7\n= "]
 
 
 def test_run_handles_abort() -> None:
@@ -330,3 +357,159 @@ def test_run_handles_abort() -> None:
     assert summary.total == 1
     assert summary.correct == 1
     assert "interrompida" in buf.getvalue()
+
+
+def _single_problem_session() -> DrillSession:
+    """Sessão de um problema só, com resposta previsível: ``7 × 7 = 49``."""
+    return DrillSession(
+        generator=TablesGenerator(TablesParams(min_factor=7, max_factor=7)),
+        attempt_repo=None,
+        schedule_repo=None,
+        max_problems=1,
+        rng=Random(0),
+    )
+
+
+def test_greeting_documents_the_pause_binding() -> None:
+    """O binding só existe para o usuário se a saudação o anunciar."""
+    buf = io.StringIO()
+    run(_single_problem_session(), output=buf, input_fn=_FakeInput(["49"]), clock=_frozen_clock)
+
+    assert "'p' + Enter pausa e retoma o cronômetro." in buf.getvalue()
+
+
+def test_pause_command_is_not_recorded_as_an_attempt() -> None:
+    """``p`` alterna o cronômetro; não conta como resposta errada."""
+    session = _single_problem_session()
+    fake = _FakeInput(["p", "p", "49"])
+
+    summary = run(session, output=io.StringIO(), input_fn=fake, clock=_frozen_clock)
+
+    assert summary.total == 1
+    assert summary.correct == 1
+    assert len(fake.prompts) == 3
+
+
+def test_pause_command_accepts_the_full_word_and_ignores_case() -> None:
+    session = _single_problem_session()
+    fake = _FakeInput(["  Pause  ", "P", "49"])
+
+    summary = run(session, output=io.StringIO(), input_fn=fake, clock=_frozen_clock)
+
+    assert summary.total == 1
+    assert summary.correct == 1
+
+
+def test_paused_prompt_hides_the_problem_and_marks_the_state() -> None:
+    """Pausado sobra o cabeçalho com o tempo congelado — a conta some.
+
+    Deixar o problema na tela permitiria pausar, resolver sem pressão e
+    retomar, produzindo um ``elapsed_ms`` que mentiria para a mediana e
+    para o SM-2.
+    """
+    fake = _FakeInput(["p", "p", "49"])
+    run(_single_problem_session(), output=io.StringIO(), input_fn=fake, clock=_frozen_clock)
+
+    running_before, paused, running_after = fake.prompts
+    assert running_before == "\n[1/1]\n00:00:00\n  7\n× 7\n= "
+    assert paused == "\n[1/1]\n00:00:00 [PAUSADO]\np + Enter para retomar: "
+    assert running_after == running_before
+
+
+def test_answer_typed_while_paused_is_ignored() -> None:
+    """Com o relógio parado, só o comando de pausa é aceito."""
+    session = _single_problem_session()
+    fake = _FakeInput(["p", "49", "p", "49"])
+
+    summary = run(session, output=io.StringIO(), input_fn=fake, clock=_frozen_clock)
+
+    assert summary.total == 1
+    assert summary.correct == 1
+    assert fake.prompts[1] == fake.prompts[2]  # a resposta ignorada só repintou o prompt
+
+
+def test_paused_interval_is_excluded_from_the_recorded_latency() -> None:
+    """O intervalo pausado não entra no ``elapsed_ms`` gravado.
+
+    Dois segundos pensando, dez minutos longe do terminal, mais um segundo
+    para responder: a latência é de três segundos, não de dez minutos.
+    """
+    session = _single_problem_session()
+    clock = _FakeClock()
+    entries = ["p", "p", "49"]
+    advances = [2.0, 600.0, 1.0]
+    calls = [0]
+
+    def answer(prompt: str = "") -> str:
+        index = calls[0]
+        calls[0] += 1
+        clock.advance(advances[index])
+        return entries[index]
+
+    run(session, output=io.StringIO(), input_fn=answer, clock=clock)
+
+    assert [a.elapsed_ms for a in session.attempts] == [3000]
+
+
+def test_elapsed_shown_in_the_hud_skips_the_paused_interval() -> None:
+    """O cronômetro do cabeçalho retoma de onde parou, não do relógio de parede."""
+    session = DrillSession(
+        generator=TablesGenerator(TablesParams(min_factor=7, max_factor=7)),
+        attempt_repo=None,
+        schedule_repo=None,
+        max_problems=2,
+        rng=Random(0),
+    )
+    clock = _FakeClock()
+    entries = ["p", "p", "49", "49"]
+    advances = [2.0, 600.0, 1.0, 1.0]
+    calls = [0]
+
+    def answer(prompt: str = "") -> str:
+        index = calls[0]
+        calls[0] += 1
+        clock.advance(advances[index])
+        return entries[index]
+
+    fake_prompts: list[str] = []
+
+    def recording(prompt: str = "") -> str:
+        fake_prompts.append(prompt)
+        return answer(prompt)
+
+    run(session, output=io.StringIO(), input_fn=recording, clock=clock)
+
+    # Cabeçalho do 2º problema: 3 s de prática ativa, apesar dos 603 s de relógio.
+    assert fake_prompts[3].startswith("\n[2/2]\n00:03:00\n")
+
+
+def test_abort_while_paused_still_ends_the_session() -> None:
+    """Ctrl-D pausado abandona como em qualquer outro momento."""
+    session = _single_problem_session()
+    buf = io.StringIO()
+
+    summary = run(session, output=buf, input_fn=_FakeInput(["p", EOFError()]), clock=_frozen_clock)
+
+    assert summary.total == 0
+    assert "interrompida" in buf.getvalue()
+
+
+def test_clock_is_faint_while_running() -> None:
+    """Rodando, o cronômetro é cromo periférico como o contador."""
+    clock = _format_clock(207.42, running=True, width=20, styled=True)
+
+    assert clock.startswith(FAINT)
+    assert clock.endswith(RESET)
+    assert len(clock.removeprefix(FAINT).removesuffix(RESET)) == 20
+
+
+def test_paused_clock_drops_the_faint_so_the_state_stands_out() -> None:
+    """O contraste com a linha apagada torna a pausa óbvia sem codificar cor."""
+    clock = _format_clock(207.42, running=False, width=20, styled=True)
+
+    assert "\x1b" not in clock
+    assert clock == "03:27:42 [PAUSADO]".rjust(20)
+
+
+def test_clock_is_plain_and_flush_left_without_width() -> None:
+    assert _format_clock(207.42, running=True, width=0, styled=False) == "03:27:42"

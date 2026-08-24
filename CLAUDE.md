@@ -98,6 +98,10 @@ O contador nunca compete com a conta. `_format_hud` em `src/mentat/ui/plain.py` 
 
 Ficar fora da linha do cursor não é só estética: o bloco inteiro vai como argumento único de `ask()`, e readline mede a largura do prompt a partir do último `\n`. Escape ANSI na linha em que o usuário digita descontaria colunas e bagunçaria backspace e setas. Qualquer estilo novo no prompt fica nas linhas anteriores.
 
+Logo abaixo do contador vem o cronômetro `MM:SS:CC`, no mesmo `rjust` e sob as mesmas regras. A fonte única de verdade é o `PracticeTimer` de `src/mentat/ui/timer.py` — `running` é derivada de `_started_at`, não há flag paralela, e `elapsed` é o **único** cálculo de tempo decorrido do projeto. `plain.run` deriva o `elapsed_ms` de cada tentativa de um par de leituras desse mesmo cronômetro, então pausa não contamina latência, mediana/p90 nem a *quality* do SM-2, e nenhuma condicional de pausa entra no caminho de gravação. Formatação é função livre (`format_elapsed`), separada da contagem, e converte em inteiro a partir de um único `round` — truncar deixaria vazar artefato binário (`int(0.29 * 100) == 28`).
+
+O binding de pausa é a linha-sentinela `p`/`pause` + Enter, tratada em `_ask_active`. Não há tecla solta a usar: o processo fica bloqueado dentro de `input()` e o readline engole tudo até o Enter — pelo mesmo motivo o cronômetro é repintado a cada prompt em vez de correr continuamente. Não trocar isso por thread de fundo nem por modo raw sem pedido explícito: as duas coisas quebram a edição de linha do readline e o contrato `input_fn` do qual os testes dependem. Pausado, a conta **sai da tela** e a linha do cronômetro perde o *faint* e ganha `[PAUSADO]`; deixar o problema visível permitiria pausar, resolver sem pressão e retomar com uma latência falsa — é a mesma família de proteção do feedback que nunca revela a resposta.
+
 `src/mentat/ui/style.py` é o único módulo que emite ANSI, e só para *tirar* ênfase — nenhuma informação é codificada em cor, então a saída sem cor não perde nada. `supports_ansi(stream)` decide: só terminal interativo e sem `NO_COLOR` no ambiente. Sem flag de CLI para isso — `NO_COLOR` é a convenção de fato e o projeto evita knobs. Padear antes de colorir é obrigatório: escapes não ocupam coluna na tela mas contam em `len()`, então `rjust` sobre texto já colorido erra o alinhamento.
 
 ## Feedback nunca revela a resposta correta
@@ -113,7 +117,7 @@ contrato de `DrillSession` deve respeitar a mesma restrição.
   em 3.14). Sintaxe PEP 758 (`except A, B:`) é válida e ruff format a
   aplica.
 - Toda mudança de código deve passar antes de commit:
-  - `pytest` (atualmente 161 testes, todos devem passar)
+  - `pytest` (atualmente 191 testes, todos devem passar)
   - `ruff check src tests`
   - `ruff format --check src tests`
   - `mypy` strict em `src/mentat` + `tests/` (config em `pyproject.toml`).

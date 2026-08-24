@@ -50,6 +50,8 @@ O default é a **conta armada**, com as casas alinhadas (unidade sob unidade, de
 
 O contador `[N/total]` é cromo periférico, não parte da conta: ocupa uma linha só sua nos dois layouts, encostado na borda direita e em cinza apagado. Quando a saída não é um terminal (pipe, redirecionamento, `NO_COLOR=1` no ambiente) ele sai cru e na margem esquerda. Ele conta problemas *distintos*, então congela durante o retry de uma resposta errada.
 
+Logo abaixo dele vem o cronômetro `MM:SS:CC` da sessão, no mesmo alinhamento e com o mesmo tratamento de cor. Ele mede tempo *ativo* de prática: `p` + Enter pausa, `p` de novo retoma, e o intervalo pausado não entra nem no relógio nem na latência gravada. Pausado, a conta sai da tela e a linha do cronômetro perde o cinza e ganha `[PAUSADO]` — esconder o problema é o que impede pausar, resolver sem pressão e retomar com uma latência que mentiria para a mediana e para o SM-2.
+
 O layout é puramente visual — não altera a chave SM-2, o `prompt` gravado no banco nem o resumo de fim de sessão.
 
 ### Flags específicas dos módulos
@@ -124,7 +126,7 @@ A camada **`storage/`** fala `sqlite3` e nada mais além dos tipos de `core/`. `
 
 A camada **`session/`** orquestra mas não decide apresentação. `DrillSession` é um iterável: `__iter__` produz o próximo `Problem` chamando `generator.next(rng)`, `record(problem, answer, elapsed_ms)` avalia via `generator.check`, monta o `Attempt` e, se houver repo, persiste. A sessão nunca cronometra nem lê input — o driver faz isso e devolve o `elapsed_ms`. Esse é o contrato que qualquer UI (terminal, TUI, GUI futura) satisfaz.
 
-A camada **`ui/`** é o único lugar onde existem `input()`, `print()` e `time.perf_counter()`. `plain.run` é o adaptador atualmente em produção; qualquer outro (Textual, web) implementa uma função análoga consumindo a mesma sessão. `ui/style.py` é o único módulo do projeto que emite ANSI, e só para apagar cromo — nunca para carregar informação, de modo que a saída sem cor não perde nada.
+A camada **`ui/`** é o único lugar onde existem `input()`, `print()` e `time.monotonic()` — este último encapsulado em `ui/timer.py`, cujo `PracticeTimer` é a fonte única de verdade sobre o cronômetro estar rodando e sobre quanto tempo ativo já passou. `plain.run` é o adaptador atualmente em produção; qualquer outro (Textual, web) implementa uma função análoga consumindo a mesma sessão. `ui/style.py` é o único módulo do projeto que emite ANSI, e só para apagar cromo — nunca para carregar informação, de modo que a saída sem cor não perde nada.
 
 ### Tipos de domínio
 
@@ -166,7 +168,7 @@ mentat drill tables --count 30
 
 **Loop de captura (`ui/` ↔ `session/`)**
 
-11. De volta ao `plain.run`: `start = time.perf_counter()` (monotônico, imune a ajustes de relógio), `answer = ask(prompt)` (onde `ask` é o `input_fn` injetado ou `builtins.input`), `elapsed_ms = int((time.perf_counter() - start) * 1000)`. Um `EOFError`/`KeyboardInterrupt` quebra o loop graciosamente — o resumo ainda é gerado com os `attempts` que chegaram até ali.
+11. De volta ao `plain.run`: `started = timer.elapsed` e a leitura vai para `_ask_active(...)`, que repinta o prompt e chama `ask` (o `input_fn` injetado ou `builtins.input`) até vir uma resposta com o cronômetro rodando — uma linha `p`/`pause` alterna a pausa em vez de valer como resposta, e pausado nenhuma outra entrada é aceita. Fechado o ciclo, `elapsed_ms = int((timer.elapsed - started) * 1000)`. Como os dois extremos saem do **mesmo** `PracticeTimer` (sobre `time.monotonic`, imune a ajustes de relógio), o intervalo pausado desaparece da latência sem que o caminho de gravação precise saber que a pausa existe; e como `elapsed` nunca decresce, o delta nunca é negativo. Um `EOFError`/`KeyboardInterrupt` — inclusive durante a pausa — quebra o loop graciosamente, e o resumo ainda é gerado com os `attempts` que chegaram até ali.
 12. `session.record(problem, answer, elapsed_ms)` valida `elapsed_ms >= 0`, chama `generator.check(problem, user_answer)` (`TablesGenerator.check` faz `strip()`, tenta `int()`, compara — nunca levanta), constrói o `Attempt` e apenda. Se `self._attempt_repo is not None`, chama `attempt_repo.record(attempt)` — o `INSERT` inclui `created_at = datetime.now(UTC).isoformat(timespec="milliseconds")`. Em seguida, o fluxo ramifica: **se a resposta estiver errada**, `self._pending_retry = problem` e `self._cycle_had_error = True` — o ciclo segue aberto; **se correta**, fecha o ciclo: computa `quality = quality_from_attempt(correct=True, elapsed_ms=elapsed_ms)` (5 se rápido, 2 se muito lento), reduz a `min(quality, 2)` se houve erro em algum ponto do ciclo, chama `update_card` no `Card` da chave e, se `self._schedule_repo is not None`, persiste via `schedule_repo.upsert(...)`.
 13. `plain.run` formata o retorno via `_format_feedback(attempt)` (`ok (Xs)` no acerto, `x errado (sua: 'Z', Xs)` no erro — a resposta certa **não** é revelada, porque o problema volta logo em seguida) e escreve no `output`.
 
@@ -263,9 +265,9 @@ digraph mentat_call_chain {
 
 ### UI desacoplada
 
-A assinatura é `plain.run(session, *, output: TextIO | None = None, input_fn: Callable[[str], str] | None = None, layout: Layout = DEFAULT_LAYOUT)`. Testes em `tests/ui/test_plain.py` instanciam um `_FakeInput` com uma lista de respostas pré-programadas e passam um `io.StringIO` como `output` — o loop roda até o fim sem tocar em `stdin`/`stdout`. Uma futura UI Textual ou GUI implementa um `run` análogo consumindo `DrillSession` via iteração + `record()`; `core/`, `session/` e `storage/` ficam intactos.
+A assinatura é `plain.run(session, *, output: TextIO | None = None, input_fn: Callable[[str], str] | None = None, layout: Layout = DEFAULT_LAYOUT, clock: Clock | None = None)`. Testes em `tests/ui/test_plain.py` instanciam um `_FakeInput` com uma lista de respostas pré-programadas e passam um `io.StringIO` como `output` — o loop roda até o fim sem tocar em `stdin`/`stdout`. O `clock` existe pelo mesmo motivo que o `rng` de `DrillSession`: com um dublê de relógio, pausa e retomada são testáveis sem `sleep`, e as asserções de prompt exato não ficam à mercê do cronômetro. Uma futura UI Textual ou GUI implementa um `run` análogo consumindo `DrillSession` via iteração + `record()`; `core/`, `session/` e `storage/` ficam intactos.
 
-O bloco do problema (contador, operandos, `= `) é montado por `_format_prompt` e entregue **inteiro** como argumento único de `ask()`: `input()` aceita prompt multilinha, imprime tudo e lê na última linha. Isso mantém a cronometragem em um par `perf_counter` só e preserva o contrato de que `input_fn` recebe exatamente o que o usuário viu — o que também é o que torna os fakes dos testes capazes de derivar a resposta do prompt nos dois layouts.
+O bloco do problema (contador, cronômetro, operandos, `= `) é montado por `_format_prompt` e entregue **inteiro** como argumento único de `ask()`: `input()` aceita prompt multilinha, imprime tudo e lê na última linha. Isso mantém a cronometragem em uma leitura de `timer.elapsed` por extremo e preserva o contrato de que `input_fn` recebe exatamente o que o usuário viu — o que também é o que torna os fakes dos testes capazes de derivar a resposta do prompt nos dois layouts.
 
 O arranjo em si mora em `src/mentat/ui/layout.py` (`Layout`, `render`), separado de `plain.py`: `render` é uma função pura `Expression -> list[str]` que não imprime nem lê, e qualquer UI futura reaproveita o mesmo desenho.
 

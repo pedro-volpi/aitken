@@ -14,6 +14,8 @@ _PROMPT_RE = re.compile(r"(\d+)\s*×\s*(\d+)")
 
 _ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 
+_CLOCK_RE = re.compile(r"^\d{2,}:\d{2}:\d{2}$")
+
 
 def _bare(line: str) -> str:
     """Linha sem estilo nem alinhamento.
@@ -198,8 +200,9 @@ def test_parser_rejects_unknown_layout() -> None:
 def test_main_honors_layout_flag(tmp_path: Path) -> None:
     """A flag chega até a UI: com --layout horizontal a conta é uma linha só.
 
-    O contador tem linha própria nos dois layouts (é cromo periférico, não
-    parte da conta), então o que distingue os modos é o desenho abaixo dele.
+    O cabeçalho (contador + cronômetro) tem linhas próprias nos dois
+    layouts (é cromo periférico, não parte da conta), então o que
+    distingue os modos é o desenho abaixo dele.
     """
     seen: list[str] = []
 
@@ -213,9 +216,10 @@ def test_main_honors_layout_flag(tmp_path: Path) -> None:
     with patch("builtins.input", fake_input):
         assert main([*argv, "--layout", "horizontal"]) == 0
     for prompt in seen:
-        blank, header, operation = prompt.split("\n")
+        blank, counter, clock, operation = prompt.split("\n")
         assert blank == ""
-        assert _bare(header).startswith("[")
+        assert _bare(counter).startswith("[")
+        assert _CLOCK_RE.match(_bare(clock)) is not None
         assert _PROMPT_RE.match(operation) is not None
         assert operation.endswith(" = ")
 
@@ -223,9 +227,10 @@ def test_main_honors_layout_flag(tmp_path: Path) -> None:
     with patch("builtins.input", fake_input):
         assert main(argv) == 0
     for prompt in seen:
-        blank, header, left, right, equals = prompt.split("\n")
+        blank, counter, clock, left, right, equals = prompt.split("\n")
         assert blank == ""
-        assert _bare(header).startswith("[")
+        assert _bare(counter).startswith("[")
+        assert _CLOCK_RE.match(_bare(clock)) is not None
         assert len(left) == len(right)
         assert right.startswith("× ")
         assert equals == "= "
