@@ -21,9 +21,9 @@ pip install -e ".[dev]"
 ## Uso
 
 ```bash
-mentat drill tables                              # tabuada (default: 30 problemas, faixa 2-9)
-mentat drill tables --min 2 --max 19             # tabuada estendida
-mentat drill squares                             # quadrados (default: 11² a 25²; 2²-10² já saem da tabuada)
+mentat drill tables                              # tabuada (default: 30 problemas, faixa 2-99)
+mentat drill tables --min 6 --max 9              # quadrante difícil da tabuada
+mentat drill squares                             # quadrados (default: 11² a 99²; 2²-10² já saem da tabuada)
 mentat drill cubes                               # cubos (default: 3³ a 10³)
 mentat drill factorial                           # fatoriais de 0! a 10! (faixa fixa)
 mentat drill tables --layout horizontal          # `17 × 86` em vez da conta armada
@@ -61,7 +61,9 @@ Além dos parâmetros comuns, `tables`, `squares` e `cubes` expõem flags própr
 | Flag | Módulos | Default | Efeito |
 | --- | --- | --- | --- |
 | `--min N` | `tables`, `squares`, `cubes` | `tables`: 2 · `squares`: 11 · `cubes`: 3 | Menor valor da faixa amostrada — fator na tabuada; base em quadrados e cubos. |
-| `--max N` | `tables`, `squares`, `cubes` | `tables`: 9 · `squares`: 25 · `cubes`: 10 | Maior valor da faixa amostrada. |
+| `--max N` | `tables`, `squares`, `cubes` | `tables`: 99 · `squares`: 99 · `cubes`: 10 | Maior valor da faixa amostrada. |
+
+Os defaults numéricos acima moram todos em `src/mentat/config.py` (`DEFAULT_TABLES_MAX_FACTOR` etc.) — mudar lá reflete na CLI, no `--help` e nos dataclasses de params de uma vez.
 | `--include-trivial` | `tables`, `squares`, `cubes` | exclui triviais | Passar a flag mantém os casos triviais no pool: `×0`/`×1` na tabuada, `0²`/`1²` em quadrados, `0³`/`1³` em cubos. Por default ficam fora porque não exercitam cálculo mental — sabê-los ≠ treiná-los. |
 | `--no-commutative` | `tables` | agrupa comutativos | Por default, `7×8` e `8×7` compartilham a chave SM-2 canônica `tables:7x8`, o que significa **mesmo `Card`, mesmo estado de aprendizado** — acertar um conta como reforço do outro. Passar a flag separa em duas chaves distintas (`tables:7x8` e `tables:8x7`) e faz o SM-2 tratá-los como itens independentes. Útil apenas se você considera que a ordem de apresentação altera a dificuldade cognitiva e quer medir cada lado em separado. |
 
@@ -87,8 +89,8 @@ Linhas marcadas com ✗ são planejadas — o nome exato do comando pode mudar q
 
 | Funcionalidade | Descrição | Como chamar | Implementado |
 | --- | --- | --- | --- |
-| Treino de tabuada | Sessão cronometrada de multiplicações na faixa configurada (padrão 2-9, estensível até qualquer inteiro). Amostragem por SM-2 + retry-on-wrong. Aceita `--min`, `--max`, `--include-trivial`, `--no-commutative` além dos [parâmetros comuns](#par%C3%A2metros-comuns-a-todo-drill). | `mentat drill tables` | ✓ |
-| Treino de quadrados | Sessão de `N²` para `N` em `[--min, --max]` (default 11–25; `2²` a `10²` já saem da tabuada, daí o corte). Aceita `--min`, `--max`, `--include-trivial`. | `mentat drill squares` | ✓ |
+| Treino de tabuada | Sessão cronometrada de multiplicações na faixa configurada (padrão 2-99, estensível até qualquer inteiro). Amostragem por SM-2 + retry-on-wrong. Aceita `--min`, `--max`, `--include-trivial`, `--no-commutative` além dos [parâmetros comuns](#par%C3%A2metros-comuns-a-todo-drill). | `mentat drill tables` | ✓ |
+| Treino de quadrados | Sessão de `N²` para `N` em `[--min, --max]` (default 11–99; `2²` a `10²` já saem da tabuada, daí o corte). Aceita `--min`, `--max`, `--include-trivial`. | `mentat drill squares` | ✓ |
 | Treino de cubos | Sessão de `N³` para `N` em `[--min, --max]` (default 3–10; `2³ = 8` é trivial). Aceita `--min`, `--max`, `--include-trivial`. | `mentat drill cubes` | ✓ |
 | Treino de fatoriais | Sessão de `N!` com `N` sorteado no pool fixo `{0, 1, ..., 10}` — sem parâmetros de faixa. | `mentat drill factorial` | ✓ |
 | Conta armada | Operações binárias são apresentadas empilhadas, com as casas alinhadas (unidade sob unidade). `--layout horizontal` volta à leitura em uma linha. Módulos unários (`N²`, `N³`, `N!`) são sempre de uma linha. | comum a todo `drill`, via `--layout` | ✓ |

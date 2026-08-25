@@ -22,7 +22,17 @@ from pathlib import Path
 from random import Random
 
 from mentat import __version__
-from mentat.config import DEFAULT_DB_PATH
+from mentat.config import (
+    DEFAULT_CUBES_MAX_BASE,
+    DEFAULT_CUBES_MIN_BASE,
+    DEFAULT_DB_PATH,
+    DEFAULT_DRILL_COUNT,
+    DEFAULT_FACTORIAL_COUNT,
+    DEFAULT_SQUARES_MAX_BASE,
+    DEFAULT_SQUARES_MIN_BASE,
+    DEFAULT_TABLES_MAX_FACTOR,
+    DEFAULT_TABLES_MIN_FACTOR,
+)
 from mentat.core.generators.base import Generator
 from mentat.core.generators.cubes import CubesGenerator, CubesParams
 from mentat.core.generators.factorial import FactorialGenerator
@@ -40,16 +50,22 @@ Todo drill usa retry-on-wrong (erros reapresentam o problema) e SM-2
 ponderado por latência (pares difíceis aparecem com mais frequência).
 """
 
-_ROOT_EPILOG = """\
+# Faixas default pré-formatadas para os textos de ajuda; os valores em si
+# moram em mentat.config.
+_TABLES_RANGE = f"{DEFAULT_TABLES_MIN_FACTOR}-{DEFAULT_TABLES_MAX_FACTOR}"
+_SQUARES_RANGE = f"{DEFAULT_SQUARES_MIN_BASE}-{DEFAULT_SQUARES_MAX_BASE}"
+_CUBES_RANGE = f"{DEFAULT_CUBES_MIN_BASE}-{DEFAULT_CUBES_MAX_BASE}"
+
+_ROOT_EPILOG = f"""\
 Módulos de drill disponíveis:
-  tables      Tabuada de multiplicação (faixa configurável, default 2-9).
-  squares     Quadrados N² (default 11-25; 2-10 já saem da tabuada).
-  cubes       Cubos N³ (default 3-10).
+  tables      Tabuada de multiplicação (faixa configurável, default {_TABLES_RANGE}).
+  squares     Quadrados N² (default {_SQUARES_RANGE}; 2-10 já saem da tabuada).
+  cubes       Cubos N³ (default {_CUBES_RANGE}).
   factorial   Fatoriais N! (pool fixo 0 a 10).
 
 Exemplos:
-  mentat drill tables                            # tabuada padrão, 30 problemas
-  mentat drill tables --min 2 --max 19 -n 40     # tabuada estendida, 40 problemas
+  mentat drill tables                            # tabuada padrão, {DEFAULT_DRILL_COUNT} problemas
+  mentat drill tables --min 6 --max 9 -n 40      # quadrante difícil da tabuada
   mentat drill cubes -n 40                       # sessão maior de cubos
   mentat drill factorial --no-persist            # sessão descartável
   mentat drill tables --layout horizontal        # 17 × 86 em vez de armado
@@ -141,7 +157,9 @@ def _layout_arg(value: str) -> Layout:
         raise argparse.ArgumentTypeError(f"valor inválido {value!r} (opções: {options})") from None
 
 
-def _add_common_drill_args(p: argparse.ArgumentParser, *, default_count: int = 30) -> None:
+def _add_common_drill_args(
+    p: argparse.ArgumentParser, *, default_count: int = DEFAULT_DRILL_COUNT
+) -> None:
     """Flags comuns a todos os subcomandos de drill.
 
     Cada chamada adiciona: ``--count/-n``, ``--db``, ``--no-persist``,
@@ -189,23 +207,23 @@ def _add_tables_subparser(
         description=(
             "Sessão de tabuada: sorteia pares (a, b) na faixa "
             "[--min, --max] e cronometra cada resposta. "
-            "Por padrão, 30 problemas sem pares triviais (×0, ×1)."
+            f"Por padrão, {DEFAULT_DRILL_COUNT} problemas sem pares triviais (×0, ×1)."
         ),
     )
     _add_common_drill_args(p)
     p.add_argument(
         "--min",
         type=int,
-        default=2,
+        default=DEFAULT_TABLES_MIN_FACTOR,
         dest="min_factor",
-        help="Menor fator incluído (default: 2).",
+        help=f"Menor fator incluído (default: {DEFAULT_TABLES_MIN_FACTOR}).",
     )
     p.add_argument(
         "--max",
         type=int,
-        default=9,
+        default=DEFAULT_TABLES_MAX_FACTOR,
         dest="max_factor",
-        help="Maior fator incluído (default: 9).",
+        help=f"Maior fator incluído (default: {DEFAULT_TABLES_MAX_FACTOR}).",
     )
     p.add_argument(
         "--include-trivial",
@@ -236,16 +254,16 @@ def _add_squares_subparser(
     p.add_argument(
         "--min",
         type=int,
-        default=11,
+        default=DEFAULT_SQUARES_MIN_BASE,
         dest="min_base",
-        help="Menor base incluída (default: 11).",
+        help=f"Menor base incluída (default: {DEFAULT_SQUARES_MIN_BASE}).",
     )
     p.add_argument(
         "--max",
         type=int,
-        default=25,
+        default=DEFAULT_SQUARES_MAX_BASE,
         dest="max_base",
-        help="Maior base incluída (default: 25).",
+        help=f"Maior base incluída (default: {DEFAULT_SQUARES_MAX_BASE}).",
     )
     p.add_argument(
         "--include-trivial",
@@ -271,16 +289,16 @@ def _add_cubes_subparser(
     p.add_argument(
         "--min",
         type=int,
-        default=3,
+        default=DEFAULT_CUBES_MIN_BASE,
         dest="min_base",
-        help="Menor base incluída (default: 3).",
+        help=f"Menor base incluída (default: {DEFAULT_CUBES_MIN_BASE}).",
     )
     p.add_argument(
         "--max",
         type=int,
-        default=10,
+        default=DEFAULT_CUBES_MAX_BASE,
         dest="max_base",
-        help="Maior base incluída (default: 10).",
+        help=f"Maior base incluída (default: {DEFAULT_CUBES_MAX_BASE}).",
     )
     p.add_argument(
         "--include-trivial",
@@ -305,7 +323,7 @@ def _add_factorial_subparser(
             "e cronometra cada resposta até ser acertada."
         ),
     )
-    _add_common_drill_args(p, default_count=20)
+    _add_common_drill_args(p, default_count=DEFAULT_FACTORIAL_COUNT)
     p.set_defaults(func=cmd_drill_factorial)
 
 

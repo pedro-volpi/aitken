@@ -20,6 +20,7 @@ from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
 from random import Random
 
+from mentat.config import DEFAULT_TABLES_MAX_FACTOR, DEFAULT_TABLES_MIN_FACTOR
 from mentat.core.expression import BinaryOp
 from mentat.core.problem import Problem
 from mentat.core.scheduler import weighted_choice
@@ -30,8 +31,10 @@ class TablesParams:
     """Configuração do gerador de tabuada.
 
     Attributes:
-        min_factor: menor fator amostrável (inclusivo). Padrão ``2``.
-        max_factor: maior fator amostrável (inclusivo). Padrão ``9``.
+        min_factor: menor fator amostrável (inclusivo). Default em
+            :mod:`mentat.config`.
+        max_factor: maior fator amostrável (inclusivo). Default em
+            :mod:`mentat.config`.
         commutative_pairs: se ``True``, ``7 × 8`` e ``8 × 7`` compartilham
             a mesma :attr:`Problem.key`, agrupando estatísticas por par
             canônico ``(min, max)``. A ordem de apresentação ao usuário
@@ -46,8 +49,8 @@ class TablesParams:
         * após aplicar ``exclude_trivial``, o pool não fica vazio
     """
 
-    min_factor: int = 2
-    max_factor: int = 9
+    min_factor: int = DEFAULT_TABLES_MIN_FACTOR
+    max_factor: int = DEFAULT_TABLES_MAX_FACTOR
     commutative_pairs: bool = True
     exclude_trivial: bool = True
 

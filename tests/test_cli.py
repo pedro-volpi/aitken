@@ -8,6 +8,10 @@ from unittest.mock import patch
 import pytest
 
 from mentat.cli import build_parser, main
+from mentat.config import DEFAULT_DRILL_COUNT, DEFAULT_FACTORIAL_COUNT
+from mentat.core.generators.cubes import CubesParams
+from mentat.core.generators.squares import SquaresParams
+from mentat.core.generators.tables import TablesParams
 from mentat.ui.layout import Layout
 
 _PROMPT_RE = re.compile(r"(\d+)\s*×\s*(\d+)")
@@ -42,12 +46,14 @@ def test_parser_requires_module() -> None:
 
 
 def test_parser_tables_defaults() -> None:
+    # Compara com TablesParams() (não com literais): o contrato é que o
+    # default da CLI e o do dataclass sejam a mesma constante de config.
     parser = build_parser()
     args = parser.parse_args(["drill", "tables"])
     assert args.module == "tables"
-    assert args.min_factor == 2
-    assert args.max_factor == 9
-    assert args.count == 30
+    assert args.min_factor == TablesParams().min_factor
+    assert args.max_factor == TablesParams().max_factor
+    assert args.count == DEFAULT_DRILL_COUNT
     assert args.include_trivial is False
     assert args.no_commutative is False
     assert args.no_persist is False
@@ -115,17 +121,17 @@ def test_main_runs_drill_tables(tmp_path: Path) -> None:
 def test_parser_squares_defaults() -> None:
     args = build_parser().parse_args(["drill", "squares"])
     assert args.module == "squares"
-    assert args.min_base == 11
-    assert args.max_base == 25
-    assert args.count == 30
+    assert args.min_base == SquaresParams().min_base
+    assert args.max_base == SquaresParams().max_base
+    assert args.count == DEFAULT_DRILL_COUNT
     assert args.include_trivial is False
 
 
 def test_parser_cubes_defaults() -> None:
     args = build_parser().parse_args(["drill", "cubes"])
     assert args.module == "cubes"
-    assert args.min_base == 3
-    assert args.max_base == 10
+    assert args.min_base == CubesParams().min_base
+    assert args.max_base == CubesParams().max_base
 
 
 def test_parser_factorial_has_no_range_flags() -> None:
@@ -133,8 +139,8 @@ def test_parser_factorial_has_no_range_flags() -> None:
     assert args.module == "factorial"
     assert not hasattr(args, "min_base")
     assert not hasattr(args, "max_base")
-    # default --count para factorial é 20 (pool de 11 itens)
-    assert args.count == 20
+    # factorial tem --count próprio: pool fixo de 11 itens
+    assert args.count == DEFAULT_FACTORIAL_COUNT
 
 
 def test_main_runs_drill_squares(tmp_path: Path) -> None:

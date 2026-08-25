@@ -1,8 +1,9 @@
 """Gerador de cubos.
 
-Cobre de 3³ até o limite configurado (default 10³) por padrão. ``0³``,
-``1³`` e ``2³`` (=8, trivial também) ficam de fora por padrão; os dois
-primeiros via ``exclude_trivial``, o terceiro via ``min_base = 3``.
+Cobre a faixa configurada de bases (defaults em :mod:`mentat.config`).
+``0³``, ``1³`` e ``2³`` (=8, trivial também) ficam de fora por padrão;
+os dois primeiros via ``exclude_trivial``, o terceiro via o default de
+``min_base``.
 
 Chave canônica: ``"cubes:N"``. Prompt: ``"N³"``. Resposta esperada:
 ``str(N ** 3)``.
@@ -13,6 +14,7 @@ from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
 from random import Random
 
+from mentat.config import DEFAULT_CUBES_MAX_BASE, DEFAULT_CUBES_MIN_BASE
 from mentat.core.expression import Term
 from mentat.core.problem import Problem
 from mentat.core.scheduler import weighted_choice
@@ -23,8 +25,10 @@ class CubesParams:
     """Configuração do gerador de cubos.
 
     Attributes:
-        min_base: menor base amostrável (inclusivo). Padrão ``3``.
-        max_base: maior base amostrável (inclusivo). Padrão ``10``.
+        min_base: menor base amostrável (inclusivo). Default em
+            :mod:`mentat.config`.
+        max_base: maior base amostrável (inclusivo). Default em
+            :mod:`mentat.config`.
         exclude_trivial: se ``True``, rejeita bases ``< 2``. Padrão ``True``.
 
     Invariantes (verificadas em ``__post_init__``):
@@ -33,8 +37,8 @@ class CubesParams:
         * após aplicar ``exclude_trivial``, o pool não fica vazio
     """
 
-    min_base: int = 3
-    max_base: int = 10
+    min_base: int = DEFAULT_CUBES_MIN_BASE
+    max_base: int = DEFAULT_CUBES_MAX_BASE
     exclude_trivial: bool = True
 
     def __post_init__(self) -> None:

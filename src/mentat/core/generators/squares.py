@@ -1,9 +1,9 @@
 """Gerador de quadrados.
 
-Cobre de 11² até o limite configurado (default 25²) por padrão — a faixa
-2²–10² sai "de graça" da tabuada, então o valor do drill de quadrados
-está nas bases maiores. ``0²`` e ``1²`` são triviais e ficam de fora
-via ``exclude_trivial``.
+Cobre a faixa configurada de bases (defaults em :mod:`mentat.config`) —
+a faixa 2²–10² sai "de graça" da tabuada, então o valor do drill de
+quadrados está nas bases maiores. ``0²`` e ``1²`` são triviais e ficam
+de fora via ``exclude_trivial``.
 
 Chave canônica: ``"squares:N"``. Prompt: ``"N²"``. Resposta esperada:
 ``str(N * N)``.
@@ -14,6 +14,7 @@ from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
 from random import Random
 
+from mentat.config import DEFAULT_SQUARES_MAX_BASE, DEFAULT_SQUARES_MIN_BASE
 from mentat.core.expression import Term
 from mentat.core.problem import Problem
 from mentat.core.scheduler import weighted_choice
@@ -24,8 +25,10 @@ class SquaresParams:
     """Configuração do gerador de quadrados.
 
     Attributes:
-        min_base: menor base amostrável (inclusivo). Padrão ``11``.
-        max_base: maior base amostrável (inclusivo). Padrão ``25``.
+        min_base: menor base amostrável (inclusivo). Default em
+            :mod:`mentat.config`.
+        max_base: maior base amostrável (inclusivo). Default em
+            :mod:`mentat.config`.
         exclude_trivial: se ``True``, rejeita bases ``< 2``. Padrão ``True``.
 
     Invariantes (verificadas em ``__post_init__``):
@@ -34,8 +37,8 @@ class SquaresParams:
         * após aplicar ``exclude_trivial``, o pool não fica vazio
     """
 
-    min_base: int = 11
-    max_base: int = 25
+    min_base: int = DEFAULT_SQUARES_MIN_BASE
+    max_base: int = DEFAULT_SQUARES_MAX_BASE
     exclude_trivial: bool = True
 
     def __post_init__(self) -> None:

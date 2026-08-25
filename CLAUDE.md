@@ -126,7 +126,11 @@ contrato de `DrillSession` deve respeitar a mesma restrição.
 ## Arquitetura (invariante)
 
 Quatro camadas em um sentido: `ui/` → `session/` → `storage/` → `core/`.
-Nenhuma importação em sentido contrário. Novo gerador entra como
+Nenhuma importação em sentido contrário. `config.py` é módulo-folha fora
+das camadas (só stdlib): **todo default visível ao usuário mora lá**
+(`DEFAULT_TABLES_MAX_FACTOR`, `DEFAULT_DRILL_COUNT`, ...), e qualquer
+camada pode importá-lo — argparse, help e dataclasses de params
+referenciam a mesma constante, nunca literais duplicados. Novo gerador entra como
 implementação do `Protocol` em `core/generators/base.py` + novo
 subparser em `cli.py` (via `_add_<module>_subparser`) + um
 `cmd_drill_<module>` que constrói o gerador e chama `_run_drill(args,

@@ -4,6 +4,12 @@ from random import Random
 
 import pytest
 
+from mentat.config import (
+    DEFAULT_CUBES_MAX_BASE,
+    DEFAULT_CUBES_MIN_BASE,
+    DEFAULT_SQUARES_MAX_BASE,
+    DEFAULT_SQUARES_MIN_BASE,
+)
 from mentat.core.expression import Term
 from mentat.core.generators.cubes import CubesGenerator, CubesParams
 from mentat.core.generators.factorial import FactorialGenerator
@@ -18,11 +24,12 @@ def test_squares_module_id() -> None:
 
 
 def test_squares_default_range_all_keys() -> None:
-    gen = SquaresGenerator(SquaresParams())  # 11..25
+    # SquaresParams() sem args deve espelhar as constantes de config.
+    gen = SquaresGenerator(SquaresParams())
     keys = list(gen.all_keys())
-    assert keys[0] == "squares:11"
-    assert keys[-1] == "squares:25"
-    assert len(keys) == 15
+    assert keys[0] == f"squares:{DEFAULT_SQUARES_MIN_BASE}"
+    assert keys[-1] == f"squares:{DEFAULT_SQUARES_MAX_BASE}"
+    assert len(keys) == DEFAULT_SQUARES_MAX_BASE - DEFAULT_SQUARES_MIN_BASE + 1
 
 
 def test_squares_sample_and_answer() -> None:
@@ -38,7 +45,7 @@ def test_squares_sample_and_answer() -> None:
 
 
 def test_squares_weighted_respects_highest_weight() -> None:
-    gen = SquaresGenerator(SquaresParams())  # 11..25
+    gen = SquaresGenerator(SquaresParams())
     weights = {k: 0.01 for k in gen.all_keys()}
     weights["squares:17"] = 100.0
     rng = Random(0)
@@ -93,11 +100,12 @@ def test_cubes_module_id() -> None:
 
 
 def test_cubes_default_range_all_keys() -> None:
-    gen = CubesGenerator(CubesParams())  # 3..10
+    # CubesParams() sem args deve espelhar as constantes de config.
+    gen = CubesGenerator(CubesParams())
     keys = list(gen.all_keys())
-    assert keys[0] == "cubes:3"
-    assert keys[-1] == "cubes:10"
-    assert len(keys) == 8
+    assert keys[0] == f"cubes:{DEFAULT_CUBES_MIN_BASE}"
+    assert keys[-1] == f"cubes:{DEFAULT_CUBES_MAX_BASE}"
+    assert len(keys) == DEFAULT_CUBES_MAX_BASE - DEFAULT_CUBES_MIN_BASE + 1
 
 
 def test_cubes_sample_and_answer() -> None:
