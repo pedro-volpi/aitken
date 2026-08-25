@@ -513,3 +513,16 @@ def test_paused_clock_drops_the_faint_so_the_state_stands_out() -> None:
 
 def test_clock_is_plain_and_flush_left_without_width() -> None:
     assert _format_clock(207.42, running=True, width=0, styled=False) == "03:27:42"
+
+
+def test_non_tty_run_never_engages_the_refresher() -> None:
+    """Sem terminal interativo não há thread de repintura nem banner.
+
+    É o que mantém o contrato ``input_fn`` determinístico nos testes: a
+    saída capturada não pode conter overlay (DECSC/DECRC) nem ASCII art.
+    """
+    buf = io.StringIO()
+    run(_single_problem_session(), output=buf, input_fn=_FakeInput(["49"]), clock=_frozen_clock)
+
+    assert "\x1b7" not in buf.getvalue()
+    assert "\x1b8" not in buf.getvalue()

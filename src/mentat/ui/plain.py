@@ -22,13 +22,21 @@ terminal, da ordem de 50–100 ms. Para drills cuja latência alvo é ≥ 1 s
 **Pausa**: como o processo fica bloqueado dentro de ``input()`` durante
 toda a questão e o readline engole cada tecla até o Enter, não existe
 tecla solta disponível — o comando é uma linha-sentinela (``p`` ou
-``pause``, ver :data:`_PAUSE_COMMANDS`). Pelo mesmo motivo o relógio do
-HUD é repintado a cada prompt (questão nova, retry, pausa, retomada) em
-vez de correr continuamente: não há event loop onde um tique caberia, e
-uma thread repintando por cima do readline bagunçaria a edição da linha.
+``pause``, ver :data:`_PAUSE_COMMANDS`).
+
+**Relógio vivo**: o cronômetro do HUD corre continuamente — a cada
+centésimo, a :class:`~mentat.ui.refresh.ClockRefresher` sobrescreve
+apenas a linha do relógio, acima do cursor, sem tocar na linha de edição
+do readline (ver o docstring de ``refresh.py`` para o truque DECSC/DECRC
+e as garantias de não-interferência). Ela só existe em terminal
+interativo (``styled``): com ``output``/``input_fn`` de teste nada de
+thread é criado e o contrato ``input_fn`` segue determinístico.
 """
 
 import builtins
+import contextlib
+import shutil
+import subprocess
 import sys
 from collections.abc import Callable
 from typing import TextIO
@@ -37,6 +45,7 @@ from mentat.core.problem import Attempt, Problem
 from mentat.core.stats import SessionSummary
 from mentat.session.drill import DrillSession
 from mentat.ui.layout import DEFAULT_LAYOUT, Layout, render
+from mentat.ui.refresh import ClockRefresher
 from mentat.ui.style import faint, supports_ansi, terminal_width
 from mentat.ui.timer import Clock, PracticeTimer, format_elapsed
 
@@ -97,32 +106,95 @@ def run(
     styled = supports_ansi(out)
     hud_width = max(terminal_width() - 1, 0) if styled else 0
     timer = PracticeTimer(clock)
+    refresher = (
+        ClockRefresher(
+            out,
+            lambda: _format_clock(timer.elapsed, running=True, width=hud_width, styled=True),
+        )
+        if styled
+        else None
+    )
 
     total = session.total_problems
     _print(f"\nSessão: {total} problemas. Digite o resultado e Enter.")
     _print("Respostas erradas são reapresentadas até serem acertadas.")
+    _print_pause_banner(out)
     _print("'p' + Enter pausa e retoma o cronômetro.")
     _print("Ctrl-C ou Ctrl-D para abandonar.\n")
 
-    for problem in session:
-        pos = session.current_position
-        started = timer.elapsed
-        answer = _ask_active(
-            ask, timer, problem, pos, total, layout, hud_width=hud_width, styled=styled
-        )
-        if answer is None:
-            _print("\nSessão interrompida.")
-            break
-        elapsed_ms = int((timer.elapsed - started) * 1000)
+    try:
+        for problem in session:
+            pos = session.current_position
+            started = timer.elapsed
+            answer = _ask_active(
+                ask,
+                timer,
+                problem,
+                pos,
+                total,
+                layout,
+                hud_width=hud_width,
+                styled=styled,
+                refresher=refresher,
+            )
+            if answer is None:
+                _print("\nSessão interrompida.")
+                break
+            elapsed_ms = int((timer.elapsed - started) * 1000)
 
-        attempt = session.record(problem, answer, elapsed_ms)
-        _print(_format_feedback(attempt))
+            attempt = session.record(problem, answer, elapsed_ms)
+            _print(_format_feedback(attempt))
+    finally:
+        if refresher is not None:
+            refresher.close()
 
     summary = session.summary()
     _print("")
     for line in _format_summary(summary):
         _print(line)
     return summary
+
+
+def _print_pause_banner(out: TextIO) -> None:
+    """Estampa o atalho de pausa em ASCII art na saudação, quando possível.
+
+    Mesma receita (e mesma cadeia de degradação) do ``mac-awake`` dos
+    dotfiles do usuário: ``figlet`` pelo desenho, ``lolcat -f`` pela cor —
+    ``-f`` porque a saída é capturada, e sem ele o lolcat detecta o pipe e
+    despe os escapes. Sem figlet, ou fora de um terminal interativo, não
+    sai nada: a linha de texto puro logo abaixo continua sendo a fonte
+    canônica (e testada) do binding, então o banner é puro cromo e pode
+    falhar em silêncio (``figlet`` ausente, subprocess com erro etc.).
+
+    lolcat só entra sob :func:`supports_ansi` — em particular, ``NO_COLOR``
+    mantém o desenho mas descarta a cor, como manda a convenção.
+    """
+    if not getattr(out, "isatty", lambda: False)():
+        return
+    figlet = shutil.which("figlet")
+    if figlet is None:
+        return
+    try:
+        art = subprocess.run(
+            [figlet, "-w", str(terminal_width()), "p = pausa"],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout
+    except OSError, subprocess.SubprocessError:
+        return
+    lolcat = shutil.which("lolcat") if supports_ansi(out) else None
+    if lolcat is not None:
+        with contextlib.suppress(OSError, subprocess.SubprocessError):
+            art = subprocess.run(
+                [lolcat, "-f"],
+                input=art,
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout
+    out.write(art)
+    out.flush()
 
 
 def _ask_active(
@@ -135,14 +207,25 @@ def _ask_active(
     *,
     hud_width: int,
     styled: bool,
+    refresher: ClockRefresher | None = None,
 ) -> str | None:
     """Lê até vir uma resposta com o cronômetro rodando.
 
     Concentra aqui o protocolo de pausa para que o laço de :func:`run`
     continue plano e o caminho de gravação siga sem condicional de pausa.
-    Cada volta repinta o prompt, que é o mecanismo de renderização que o
-    programa já tem — é por isso que o relógio aparece atualizado ao pausar
-    e ao retomar.
+    Cada volta repinta o prompt inteiro — é assim que a troca de estado
+    (pausa, retomada, retry) aparece na tela; entre um prompt e outro, a
+    ``refresher`` mantém só a linha do relógio viva.
+
+    O arme acontece imediatamente antes do ``ask`` e só com o cronômetro
+    correndo (pausado, o relógio está congelado e a repintura seria
+    ruído); o desarme fica em ``finally`` para que nenhuma pintura
+    concorra com o feedback, com o resumo ou com o próximo prompt — nem
+    sobreviva a um ``Ctrl-C``. O relógio está sempre a
+    ``prompt.count("\\n") - 2`` linhas acima do cursor: o prompt abre com
+    ``\\n`` e o contador ocupa a linha seguinte, então descontadas essas
+    duas quebras restam exatamente as linhas entre o relógio e a linha de
+    edição.
 
     Pausado, só o comando de pausa é aceito: responder com o relógio parado
     inflaria a estatística ao contrário, já que o tempo de raciocínio teria
@@ -162,10 +245,15 @@ def _ask_active(
             hud_width=hud_width,
             styled=styled,
         )
+        if refresher is not None and timer.running:
+            refresher.arm(rows_up=prompt.count("\n") - 2)
         try:
             entry = ask(prompt)
         except EOFError, KeyboardInterrupt:
             return None
+        finally:
+            if refresher is not None:
+                refresher.disarm()
         if entry.strip().lower() in _PAUSE_COMMANDS:
             timer.toggle()
         elif timer.running:
