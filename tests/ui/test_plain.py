@@ -18,8 +18,11 @@ from mentat.core.problem import Problem
 from mentat.session.drill import DrillSession
 from mentat.storage.db import open_db
 from mentat.storage.repositories import AttemptRepo
-from mentat.ui.layout import Layout
+from mentat.ui.hotkeys import PAUSE
+from mentat.ui.layout import Layout, render
 from mentat.ui.plain import _format_clock, _format_hud, _format_prompt, run
+from mentat.ui.presenter import VisualPresenter
+from mentat.ui.reader import PauseRequested
 from mentat.ui.style import FAINT, RESET
 
 _PROMPT_RE = re.compile(r"(\d+)\s*×\s*(\d+)")
@@ -206,7 +209,13 @@ def test_horizontal_layout_keeps_the_operation_on_one_line() -> None:
         rng=Random(0),
     )
     fake = _AutoCorrect()
-    run(session, output=io.StringIO(), input_fn=fake, layout=Layout.HORIZONTAL, clock=_frozen_clock)
+    run(
+        session,
+        output=io.StringIO(),
+        input_fn=fake,
+        presenter=VisualPresenter(Layout.HORIZONTAL),
+        clock=_frozen_clock,
+    )
 
     assert fake.prompts == ["\n[1/1]\n00:00:00\n7 × 7 = "]
 
@@ -239,7 +248,13 @@ def test_unary_module_stays_on_one_line_even_in_vertical() -> None:
         rng=Random(0),
     )
     fake = _FakeInput(["169"])
-    run(session, output=io.StringIO(), input_fn=fake, layout=Layout.VERTICAL, clock=_frozen_clock)
+    run(
+        session,
+        output=io.StringIO(),
+        input_fn=fake,
+        presenter=VisualPresenter(Layout.VERTICAL),
+        clock=_frozen_clock,
+    )
 
     assert fake.prompts == ["\n[1/1]\n00:00:00\n13² = "]
 
@@ -285,7 +300,9 @@ def test_prompt_keeps_the_operands_flush_left_while_the_hud_goes_right() -> None
     """Alinhar o contador não pode empurrar a conta armada."""
     problem = Problem("tables", "7x7", BinaryOp("17", "×", "86"), "1462")
 
-    prompt = _format_prompt(problem, 3, 30, Layout.VERTICAL, 207.42, hud_width=40, styled=False)
+    prompt = _format_prompt(
+        render(problem.expression, Layout.VERTICAL), 3, 30, 207.42, hud_width=40, styled=False
+    )
 
     blank, hud, clock, left, right, tail = prompt.splitlines()
     assert blank == ""
@@ -297,7 +314,9 @@ def test_prompt_keeps_the_operands_flush_left_while_the_hud_goes_right() -> None
 def test_unary_prompt_also_gets_the_hud_on_its_own_line() -> None:
     problem = Problem("squares", "13", Term("13²"), "169")
 
-    prompt = _format_prompt(problem, 3, 30, Layout.VERTICAL, 207.42, hud_width=40, styled=False)
+    prompt = _format_prompt(
+        render(problem.expression, Layout.VERTICAL), 3, 30, 207.42, hud_width=40, styled=False
+    )
 
     expected_header = "\n" + "[3/30]".rjust(40) + "\n" + "03:27:42".rjust(40)
     assert prompt == expected_header + "\n13² = "
@@ -310,7 +329,13 @@ def test_ansi_never_lands_on_the_line_the_user_types_in() -> None:
     for layout in Layout:
         for running in (True, False):
             prompt = _format_prompt(
-                problem, 3, 30, layout, 207.42, running=running, hud_width=40, styled=True
+                render(problem.expression, layout),
+                3,
+                30,
+                207.42,
+                running=running,
+                hud_width=40,
+                styled=True,
             )
             assert "\x1b" not in prompt.splitlines()[-1]
 
@@ -371,11 +396,94 @@ def _single_problem_session() -> DrillSession:
 
 
 def test_greeting_documents_the_pause_binding() -> None:
-    """O binding só existe para o usuário se a saudação o anunciar."""
+    """O binding só existe para o usuário se a saudação o anunciar.
+
+    A asserção é dirigida pelo registro canônico (:data:`PAUSE`), não por
+    literal: se o atalho mudar em ``hotkeys.py``, a saudação acompanha e o
+    teste continua provando a fonte única.
+    """
     buf = io.StringIO()
     run(_single_problem_session(), output=buf, input_fn=_FakeInput(["49"]), clock=_frozen_clock)
 
-    assert "'p' + Enter pausa e retoma o cronômetro." in buf.getvalue()
+    greeting = buf.getvalue()
+    assert PAUSE.keys in greeting
+    assert PAUSE.description in greeting
+
+
+class _RecordingPresenter:
+    """Presenter dublê: linhas fixas, contando quantas vezes apresentou."""
+
+    def __init__(self, lines: list[str]) -> None:
+        self.lines = lines
+        self.presented: list[str] = []
+
+    def present(self, problem: Problem) -> list[str]:
+        self.presented.append(problem.key)
+        return self.lines
+
+
+def test_injected_presenter_lines_reach_the_prompt() -> None:
+    """O driver compõe o que o presenter devolver — a costura é plugável."""
+    presenter = _RecordingPresenter(["<<sete vezes sete>>"])
+    fake = _FakeInput(["49"])
+    run(
+        _single_problem_session(),
+        output=io.StringIO(),
+        input_fn=fake,
+        presenter=presenter,
+        clock=_frozen_clock,
+    )
+
+    assert fake.prompts == ["\n[1/1]\n00:00:00\n<<sete vezes sete>> = "]
+
+
+def test_empty_presenter_lines_leave_header_and_answer_marker_only() -> None:
+    """Apresentação não-visual (voz): o prompt é só cabeçalho + ``= ``."""
+    presenter = _RecordingPresenter([])
+    fake = _FakeInput(["49"])
+    run(
+        _single_problem_session(),
+        output=io.StringIO(),
+        input_fn=fake,
+        presenter=presenter,
+        clock=_frozen_clock,
+    )
+
+    assert fake.prompts == ["\n[1/1]\n00:00:00\n= "]
+
+
+def test_presenter_presents_once_per_showing_including_retry() -> None:
+    """Retry re-apresenta (a questão volta); toggle de pausa não re-apresenta."""
+    presenter = _RecordingPresenter(["7 × 7"])
+    fake = _FakeInput(["1", "p", "p", "49"])
+    run(
+        _single_problem_session(),
+        output=io.StringIO(),
+        input_fn=fake,
+        presenter=presenter,
+        clock=_frozen_clock,
+    )
+
+    # Duas apresentações: a original e o retry. As duas voltas de pausa
+    # repintaram o prompt sem pedir nova apresentação.
+    assert len(presenter.presented) == 2
+    assert len(fake.prompts) == 4
+
+
+def test_pause_requested_from_the_reader_toggles_the_timer() -> None:
+    """O Ctrl+P do leitor cbreak converge no mesmo toggle da linha-sentinela."""
+    session = _single_problem_session()
+    fake = _FakeInput([PauseRequested(), PauseRequested(), "49"])
+
+    summary = run(session, output=io.StringIO(), input_fn=fake, clock=_frozen_clock)
+
+    assert summary.total == 1
+    assert summary.correct == 1
+    # 1º prompt rodando, 2º pausado (a conta some), 3º rodando de novo.
+    running, paused, resumed = fake.prompts
+    assert "[PAUSADO]" in paused
+    assert "7" not in paused.replace("00:00:00", "")
+    assert resumed == running
 
 
 def test_pause_command_is_not_recorded_as_an_attempt() -> None:
@@ -412,7 +520,7 @@ def test_paused_prompt_hides_the_problem_and_marks_the_state() -> None:
 
     running_before, paused, running_after = fake.prompts
     assert running_before == "\n[1/1]\n00:00:00\n  7\n× 7\n= "
-    assert paused == "\n[1/1]\n00:00:00 [PAUSADO]\np + Enter para retomar: "
+    assert paused == "\n[1/1]\n00:00:00 [PAUSADO]\nCtrl+P para retomar: "
     assert running_after == running_before
 
 

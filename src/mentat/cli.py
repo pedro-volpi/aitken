@@ -43,6 +43,7 @@ from mentat.storage.db import open_db
 from mentat.storage.repositories import AttemptRepo, ScheduleRepo
 from mentat.ui import plain
 from mentat.ui.layout import DEFAULT_LAYOUT, Layout
+from mentat.ui.presenter import VisualPresenter
 
 _ROOT_DESCRIPTION = """\
 Treinador CLI de aritmética mental com foco em fluência por latência.
@@ -391,7 +392,7 @@ def _run_drill(args: argparse.Namespace, generator: Generator) -> int:
             max_problems=args.count,
             rng=rng,
         )
-        plain.run(session, layout=args.layout)
+        plain.run(session, presenter=VisualPresenter(args.layout))
     finally:
         if conn is not None:
             conn.close()

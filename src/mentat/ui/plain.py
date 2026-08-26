@@ -19,10 +19,20 @@ latência efetiva é dominada pelo tempo de digitação e pelo newline do
 terminal, da ordem de 50–100 ms. Para drills cuja latência alvo é ≥ 1 s
 (toda a tabuada), essa margem é irrelevante.
 
-**Pausa**: como o processo fica bloqueado dentro de ``input()`` durante
-toda a questão e o readline engole cada tecla até o Enter, não existe
-tecla solta disponível — o comando é uma linha-sentinela (``p`` ou
-``pause``, ver :data:`_PAUSE_COMMANDS`).
+**Pausa**: em terminal interativo a leitura da resposta não passa mais
+pelo ``input()``/readline, e sim pelo leitor cbreak de
+:mod:`mentat.ui.reader` — é ele que torna o Ctrl+P
+(:data:`~mentat.ui.hotkeys.PAUSE`) uma tecla de verdade, levantando
+:class:`~mentat.ui.reader.PauseRequested` no meio da digitação. Fora de
+um terminal (testes, pipe), o ``ask`` continua sendo ``input_fn``/
+``input()`` e a pausa cai no fallback de linha-sentinela (``p``/``pause``
++ Enter, os ``aliases`` do mesmo :class:`~mentat.ui.hotkeys.Hotkey`).
+
+**Apresentação**: o driver não desenha o problema — pede a um
+:class:`~mentat.ui.presenter.Presenter` (``present(problem)``, uma vez
+por apresentação, retry incluído) e compõe as linhas devolvidas no
+prompt. Trocar tela por voz ou flash anzan é trocar o presenter no ponto
+de composição (:mod:`mentat.cli`), sem tocar neste loop.
 
 **Relógio vivo**: o cronômetro do HUD corre continuamente — a cada
 centésimo, a :class:`~mentat.ui.refresh.ClockRefresher` sobrescreve
@@ -34,32 +44,24 @@ thread é criado e o contrato ``input_fn`` segue determinístico.
 """
 
 import builtins
-import contextlib
-import shutil
-import subprocess
 import sys
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from typing import TextIO
 
-from mentat.core.problem import Attempt, Problem
+from mentat.core.problem import Attempt
 from mentat.core.stats import SessionSummary
 from mentat.session.drill import DrillSession
-from mentat.ui.layout import DEFAULT_LAYOUT, Layout, render
+from mentat.ui import welcome
+from mentat.ui.hotkeys import PAUSE
+from mentat.ui.presenter import Presenter, VisualPresenter
+from mentat.ui.reader import PauseRequested, tty_reader
 from mentat.ui.refresh import ClockRefresher
 from mentat.ui.style import faint, supports_ansi, terminal_width
 from mentat.ui.timer import Clock, PracticeTimer, format_elapsed
 
 InputFn = Callable[[str], str]
 
-_PAUSE_COMMANDS = frozenset({"p", "pause"})
-"""Linhas que alternam a pausa em vez de valerem como resposta.
-
-Nenhuma colide com resposta legítima: todo drill espera um número. Antes
-disso, ``p`` seria só uma resposta errada a mais, reprovada por
-``Generator.check``.
-"""
-
-_PAUSE_HINT = "p + Enter para retomar: "
+_PAUSE_HINT = f"{PAUSE.keys} para retomar: "
 """Linha do cursor enquanto pausado — o prompt em si documenta a saída."""
 
 
@@ -68,7 +70,7 @@ def run(
     *,
     output: TextIO | None = None,
     input_fn: InputFn | None = None,
-    layout: Layout = DEFAULT_LAYOUT,
+    presenter: Presenter | None = None,
     clock: Clock | None = None,
 ) -> SessionSummary:
     """Executa uma sessão inteira com I/O em texto e devolve o resumo.
@@ -78,11 +80,16 @@ def run(
         output: stream de saída; padrão ``sys.stdout``. Aceita qualquer
             objeto com ``write`` — útil em testes para capturar output.
         input_fn: callable ``(prompt) -> str`` para leitura; padrão
-            ``None`` (resolve para :func:`builtins.input` em tempo de
+            ``None``, que resolve para o leitor cbreak de
+            :mod:`mentat.ui.reader` quando saída **e** stdin são um
+            terminal (é ele que dá o Ctrl+P), e para
+            :func:`builtins.input` caso contrário (resolvido em tempo de
             chamada — necessário para que ``patch("builtins.input", ...)``
             em testes tenha efeito).
-        layout: disposição do problema na tela (ver :mod:`mentat.ui.layout`);
-            padrão conta armada.
+        presenter: apresentação do problema (ver
+            :mod:`mentat.ui.presenter`); padrão ``None`` resolve para
+            :class:`~mentat.ui.presenter.VisualPresenter` com o layout
+            default (conta armada).
         clock: fonte de tempo do cronômetro; padrão :func:`time.monotonic`.
             Injetável para que o teste de pausa seja determinístico sem
             dormir de verdade — e para que as asserções de prompt exato não
@@ -94,7 +101,15 @@ def run(
         efetivamente respondido).
     """
     out = output if output is not None else sys.stdout
-    ask: InputFn = input_fn if input_fn is not None else builtins.input
+    if presenter is None:
+        presenter = VisualPresenter()
+    interactive = getattr(out, "isatty", lambda: False)() and sys.stdin.isatty()
+    if input_fn is not None:
+        ask: InputFn = input_fn
+    elif interactive:
+        ask = tty_reader(out)
+    else:
+        ask = builtins.input
 
     def _print(line: str = "") -> None:
         out.write(line + "\n")
@@ -116,23 +131,21 @@ def run(
     )
 
     total = session.total_problems
+    welcome.print_welcome(out)
     _print(f"\nSessão: {total} problemas. Digite o resultado e Enter.")
-    _print("Respostas erradas são reapresentadas até serem acertadas.")
-    _print_pause_banner(out)
-    _print("'p' + Enter pausa e retoma o cronômetro.")
-    _print("Ctrl-C ou Ctrl-D para abandonar.\n")
+    _print("Respostas erradas são reapresentadas até serem acertadas.\n")
 
     try:
         for problem in session:
             pos = session.current_position
+            lines = presenter.present(problem)
             started = timer.elapsed
             answer = _ask_active(
                 ask,
                 timer,
-                problem,
+                lines,
                 pos,
                 total,
-                layout,
                 hud_width=hud_width,
                 styled=styled,
                 refresher=refresher,
@@ -155,55 +168,12 @@ def run(
     return summary
 
 
-def _print_pause_banner(out: TextIO) -> None:
-    """Estampa o atalho de pausa em ASCII art na saudação, quando possível.
-
-    Mesma receita (e mesma cadeia de degradação) do ``mac-awake`` dos
-    dotfiles do usuário: ``figlet`` pelo desenho, ``lolcat -f`` pela cor —
-    ``-f`` porque a saída é capturada, e sem ele o lolcat detecta o pipe e
-    despe os escapes. Sem figlet, ou fora de um terminal interativo, não
-    sai nada: a linha de texto puro logo abaixo continua sendo a fonte
-    canônica (e testada) do binding, então o banner é puro cromo e pode
-    falhar em silêncio (``figlet`` ausente, subprocess com erro etc.).
-
-    lolcat só entra sob :func:`supports_ansi` — em particular, ``NO_COLOR``
-    mantém o desenho mas descarta a cor, como manda a convenção.
-    """
-    if not getattr(out, "isatty", lambda: False)():
-        return
-    figlet = shutil.which("figlet")
-    if figlet is None:
-        return
-    try:
-        art = subprocess.run(
-            [figlet, "-w", str(terminal_width()), "p = pausa"],
-            capture_output=True,
-            text=True,
-            check=True,
-        ).stdout
-    except OSError, subprocess.SubprocessError:
-        return
-    lolcat = shutil.which("lolcat") if supports_ansi(out) else None
-    if lolcat is not None:
-        with contextlib.suppress(OSError, subprocess.SubprocessError):
-            art = subprocess.run(
-                [lolcat, "-f"],
-                input=art,
-                capture_output=True,
-                text=True,
-                check=True,
-            ).stdout
-    out.write(art)
-    out.flush()
-
-
 def _ask_active(
     ask: InputFn,
     timer: PracticeTimer,
-    problem: Problem,
+    lines: Sequence[str],
     position: int,
     total: int,
-    layout: Layout,
     *,
     hud_width: int,
     styled: bool,
@@ -215,7 +185,10 @@ def _ask_active(
     continue plano e o caminho de gravação siga sem condicional de pausa.
     Cada volta repinta o prompt inteiro — é assim que a troca de estado
     (pausa, retomada, retry) aparece na tela; entre um prompt e outro, a
-    ``refresher`` mantém só a linha do relógio viva.
+    ``refresher`` mantém só a linha do relógio viva. As ``lines`` chegam
+    prontas do presenter e são **reusadas** nos redesenhos: pausar e
+    retomar não re-apresenta o problema (um presenter de voz não deve
+    repetir a fala num toggle).
 
     O arme acontece imediatamente antes do ``ask`` e só com o cronômetro
     correndo (pausado, o relógio está congelado e a repintura seria
@@ -231,15 +204,19 @@ def _ask_active(
     inflaria a estatística ao contrário, já que o tempo de raciocínio teria
     ficado de fora da medição.
 
+    A pausa chega por dois caminhos que convergem no mesmo ``toggle``: o
+    Ctrl+P do leitor cbreak (:class:`PauseRequested`, terminal interativo)
+    e a linha-sentinela dos ``aliases`` de :data:`PAUSE` (fallback de
+    ``input()``/testes).
+
     Returns:
         A linha digitada, ou ``None`` se o usuário abandonou a sessão.
     """
     while True:
         prompt = _format_prompt(
-            problem,
+            lines,
             position,
             total,
-            layout,
             timer.elapsed,
             running=timer.running,
             hud_width=hud_width,
@@ -249,22 +226,24 @@ def _ask_active(
             refresher.arm(rows_up=prompt.count("\n") - 2)
         try:
             entry = ask(prompt)
+        except PauseRequested:
+            timer.toggle()
+            continue
         except EOFError, KeyboardInterrupt:
             return None
         finally:
             if refresher is not None:
                 refresher.disarm()
-        if entry.strip().lower() in _PAUSE_COMMANDS:
+        if entry.strip().lower() in PAUSE.aliases:
             timer.toggle()
         elif timer.running:
             return entry
 
 
 def _format_prompt(
-    problem: Problem,
+    lines: Sequence[str],
     position: int,
     total: int,
-    layout: Layout,
     elapsed: float,
     *,
     running: bool = True,
@@ -303,20 +282,25 @@ def _format_prompt(
         <blank>
                                                       [3/30]
                                            03:27:42 [PAUSADO]
-        p + Enter para retomar:
+        Ctrl+P para retomar:
 
     Esconder o problema não é enfeite: com ele na tela dava para pausar,
     resolver sem pressão e retomar, produzindo um ``elapsed_ms`` baixo que
     envenenaria a mediana da sessão e a *quality* do SM-2. É a mesma
     política do feedback que nunca revela a resposta certa.
 
-    Ter o cabeçalho fora da linha do cursor não é só estética: readline mede
-    a largura do prompt a partir do último ``\\n``, então os escapes ANSI do
+    Ter o cabeçalho fora da linha do cursor não é só estética: tanto o
+    fallback ``input()``/readline (que mede a largura do prompt a partir
+    do último ``\\n``) quanto o eco manual do leitor cbreak assumem que a
+    linha de edição não carrega escape ANSI — os escapes do
     :func:`_format_hud` e do :func:`_format_clock` ficam em linhas
     anteriores e não descontam colunas da edição da resposta. Na conta
     armada isso também evita desalinhar as colunas dos operandos.
 
     Args:
+        lines: resíduo visual do presenter (``present(problem)``), já
+            desenhado. Pode ser vazio — apresentação não-visual (voz)
+            deixa só o cabeçalho e o ``= `` de resposta.
         elapsed: segundos de prática ativa a exibir. Recebe o número, não o
             cronômetro — a formatação continua pura e testável sozinha.
         running: ``False`` desenha a variante pausada.
@@ -329,7 +313,8 @@ def _format_prompt(
     header = f"\n{hud}\n{clock}"
     if not running:
         return f"{header}\n{_PAUSE_HINT}"
-    lines = render(problem.expression, layout)
+    if not lines:
+        return f"{header}\n= "
     if len(lines) == 1:
         return f"{header}\n{lines[0]} = "
     block = "\n".join(lines)

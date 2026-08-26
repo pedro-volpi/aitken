@@ -6,7 +6,7 @@ caberia. A pedido explícito do usuário, este módulo introduz a peça que
 faltava: uma thread de fundo que, a cada centésimo de segundo, sobrescreve
 **somente** a linha do cronômetro, algumas linhas acima do cursor.
 
-O truque que preserva a edição do readline é nunca tocar na linha em que o
+O truque que preserva a edição da resposta é nunca tocar na linha em que o
 usuário digita. Cada repintura é uma única ``write()`` com a sequência
 DECSC → sobe N linhas → ``\\r`` + linha nova → DECRC (:func:`overlay`):
 o cursor volta exatamente para onde estava e o buffer de edição nunca é
