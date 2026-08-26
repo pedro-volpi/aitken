@@ -30,6 +30,16 @@ qualquer ponto do ciclo rebaixam a quality para 2 (recall failure), o que
 zera o streak e reduz ``ease_factor``. Isso faz com que chaves difíceis
 sejam amostradas com maior frequência na próxima sessão (e, se o mesmo
 par recair durante *esta* sessão, também agora).
+
+**Agnóstica a módulos**: a sessão nunca pergunta ao gerador "de que
+módulo você é" — carrega os ``Card`` do *universo* do gerador
+(``load_for(generator.all_keys())``) e persiste cada update sob o
+``module_id`` do próprio :class:`Problem`. Como as chaves são globalmente
+únicas (invariante de ``Problem``), nada aqui muda se o gerador for
+composto e produzir problemas de vários módulos na mesma sessão: pesos,
+exclusão de repetição e estado SM-2 continuam corretos por construção, e
+cada tentativa/Card é gravado sob seu módulo verdadeiro — o treino misto
+alimenta o histórico dos drills individuais e vice-versa.
 """
 
 from collections.abc import Iterator
@@ -87,7 +97,7 @@ class DrillSession:
         self._cycle_had_error = False
         self._last_key: str | None = None
         self._cards: dict[str, Card] = (
-            schedule_repo.load(generator.module_id) if schedule_repo is not None else {}
+            schedule_repo.load_for(generator.all_keys()) if schedule_repo is not None else {}
         )
 
     @property

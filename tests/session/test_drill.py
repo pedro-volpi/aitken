@@ -1,12 +1,17 @@
 """Testes de :class:`DrillSession` — orquestração, retry e SM-2."""
 
+from collections.abc import Mapping, Sequence
+from collections.abc import Set as AbstractSet
 from pathlib import Path
 from random import Random
 
 import pytest
 
+from mentat.core.expression import Term
 from mentat.core.generators.squares import SquaresGenerator, SquaresParams
 from mentat.core.generators.tables import TablesGenerator, TablesParams
+from mentat.core.problem import Problem
+from mentat.core.scheduler import Card, weighted_choice
 from mentat.session.drill import DrillSession
 from mentat.storage.db import open_db
 from mentat.storage.repositories import AttemptRepo, ScheduleRepo
@@ -321,5 +326,74 @@ def test_schedule_repo_persists_across_sessions(tmp_path: Path) -> None:
         )
         assert s2.card_for(p.key) is not None
         assert s2.card_for(p.key).consecutive_correct == 1  # type: ignore[union-attr]
+    finally:
+        conn.close()
+
+
+class _TwoModuleGenerator:
+    """Dublê que emite problemas de dois módulos na mesma sessão.
+
+    Não é o drill misto (que não existe ainda) — é a prova de que a costura
+    já o comporta: satisfaz exatamente o mesmo ``Protocol`` dos geradores
+    de produção, sem ``module_id`` único, e a sessão o consome sem saber
+    que há dois módulos por trás.
+    """
+
+    def __init__(self) -> None:
+        self._keys = ["alfa:1", "alfa:2", "beta:1", "beta:2"]
+
+    def all_keys(self) -> Sequence[str]:
+        return self._keys
+
+    def next(
+        self,
+        rng: Random,
+        *,
+        weights: Mapping[str, float] | None = None,
+        exclude: AbstractSet[str] = frozenset(),
+    ) -> Problem:
+        key = weighted_choice(rng, self._keys, weights or {}, exclude=exclude)
+        module, digit = key.split(":")
+        return Problem(module_id=module, key=key, expression=Term(digit), expected_answer=digit)
+
+    def check(self, problem: Problem, user_answer: str) -> bool:
+        return user_answer.strip() == problem.expected_answer
+
+
+def test_session_is_closed_under_generator_composition(tmp_path: Path) -> None:
+    """Uma sessão multi-módulo funciona ponta a ponta com persistência real.
+
+    Três garantias, nesta ordem: (1) o estado SM-2 pré-existente de
+    *qualquer* módulo do universo é carregado (a carga é por universo, não
+    por módulo); (2) cada tentativa e cada ``Card`` são gravados sob o
+    ``module_id`` verdadeiro do problema; (3) as partições não se
+    contaminam.
+    """
+    conn = open_db(tmp_path / "misto.db")
+    try:
+        sched = ScheduleRepo(conn)
+        attempts = AttemptRepo(conn)
+        seeded = Card(ease_factor=1.3, consecutive_correct=0)
+        sched.upsert("beta", "beta:1", seeded)
+
+        session = DrillSession(
+            generator=_TwoModuleGenerator(),
+            attempt_repo=attempts,
+            schedule_repo=sched,
+            max_problems=6,
+            rng=Random(0),
+        )
+        assert session.card_for("beta:1") == seeded  # (1) carga por universo
+
+        for problem in session:
+            session.record(problem, problem.expected_answer, elapsed_ms=100)
+
+        assert attempts.count() == 6
+        assert attempts.count(module_id="alfa") + attempts.count(module_id="beta") == 6  # (2)
+        alfa_cards = sched.load("alfa")
+        beta_cards = sched.load("beta")
+        assert set(alfa_cards) <= {"alfa:1", "alfa:2"}  # (3) partições limpas
+        assert set(beta_cards) <= {"beta:1", "beta:2"}
+        assert alfa_cards and beta_cards  # os dois módulos foram exercitados e persistidos
     finally:
         conn.close()

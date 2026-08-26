@@ -52,8 +52,10 @@ Todo drill amostra pelo scheduler SM-2 de `src/mentat/core/scheduler.py`.
 O ciclo:
 
 1. `DrillSession.__init__` carrega `dict[str, Card]` via
-   `ScheduleRepo.load(module_id)` se o repo existe; caso contrário começa
-   vazio (scheduling só em memória).
+   `ScheduleRepo.load_for(generator.all_keys())` se o repo existe; caso
+   contrário começa vazio (scheduling só em memória). A carga é pelo
+   **universo do gerador**, não por módulo — a sessão nunca pergunta de
+   que módulo o gerador é.
 2. `__iter__` chama `generator.next(rng, weights=weights_from_cards(...))`;
    geradores usam `rng.choices` ponderado por chave. Chaves inéditas
    recebem o maior peso (`sampling_weight(None) = 4.0`).
@@ -69,8 +71,18 @@ Contrato do `Generator` (`src/mentat/core/generators/base.py`):
 - `check(problem, user_answer) -> bool`
 
 Qualquer novo módulo precisa satisfazer os três; sem isso, o scheduler
-não consegue enumerar o universo nem amostrar ponderado. Não adicionar
-flag para desligar SM-2 sem solicitação explícita.
+não consegue enumerar o universo nem amostrar ponderado. O contrato **não
+tem `module_id`** e é **fechado sob composição**: um drill misto futuro é
+um gerador *composto* que embrulha outros geradores e satisfaz o mesmo
+`Protocol` (`all_keys` = união dos filhos, `next` delega, `check`
+despacha por `problem.module_id`) — entra pela mesma receita de qualquer
+módulo (gerador + subparser + `cmd_*`), sem tocar `session/`/`storage/`.
+Duas invariantes sustentam isso: toda `key` começa com `"<module_id>:"`
+(verificada em `Problem.__post_init__` — é o que impede `squares:13` e
+`cubes:13` de colidirem em pesos, exclusão e Cards) e cada
+tentativa/Card é persistido sob o `module_id` do próprio `Problem`, então
+treino misto e drills individuais alimentam o mesmo histórico. Não
+adicionar flag para desligar SM-2 sem solicitação explícita.
 
 ## Estrutura é `core/`, arranjo é `ui/`
 
@@ -121,7 +133,7 @@ contrato de `DrillSession` deve respeitar a mesma restrição.
   em 3.14). Sintaxe PEP 758 (`except A, B:`) é válida e ruff format a
   aplica.
 - Toda mudança de código deve passar antes de commit:
-  - `pytest` (atualmente 222 testes, todos devem passar)
+  - `pytest` (atualmente 229 testes, todos devem passar)
   - `ruff check src tests`
   - `ruff format --check src tests`
   - `mypy` strict em `src/mentat` + `tests/` (config em `pyproject.toml`).

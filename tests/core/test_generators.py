@@ -10,6 +10,9 @@ from random import Random
 import pytest
 
 from mentat.core.expression import BinaryOp, Term
+from mentat.core.generators.cubes import CubesGenerator, CubesParams
+from mentat.core.generators.factorial import FactorialGenerator
+from mentat.core.generators.squares import SquaresGenerator, SquaresParams
 from mentat.core.generators.tables import TablesGenerator, TablesParams
 from mentat.core.problem import Problem
 
@@ -186,3 +189,29 @@ def test_extended_range_up_to_19() -> None:
     for _ in range(500):
         a, b = _split_prompt(gen.next(rng).prompt)
         assert 2 <= a <= 19 and 2 <= b <= 19
+
+
+def test_problem_rejects_key_without_module_prefix() -> None:
+    """A unicidade global da chave é invariante do domínio, não convenção.
+
+    ``weights``, ``exclude`` e o estado SM-2 da sessão são indexados por
+    ``key`` pura; sem o prefixo, ``squares:13`` e ``cubes:13`` colidiriam
+    num gerador composto. Construir um ``Problem`` fora do formato falha
+    na hora, não silenciosamente na estatística.
+    """
+    with pytest.raises(ValueError, match="deve começar com 'tables:'"):
+        Problem("tables", "7x8", BinaryOp("7", "×", "8"), "56")
+
+
+def test_every_generator_emits_globally_unique_keys() -> None:
+    """Os universos dos módulos são disjuntos — pré-condição de composição."""
+    pools = [
+        TablesGenerator(TablesParams()).all_keys(),
+        SquaresGenerator(SquaresParams()).all_keys(),
+        CubesGenerator(CubesParams()).all_keys(),
+        FactorialGenerator().all_keys(),
+    ]
+    union: set[str] = set()
+    for pool in pools:
+        assert union.isdisjoint(pool)
+        union.update(pool)

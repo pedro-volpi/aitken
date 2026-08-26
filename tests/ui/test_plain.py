@@ -298,7 +298,7 @@ def test_hud_pads_before_coloring() -> None:
 
 def test_prompt_keeps_the_operands_flush_left_while_the_hud_goes_right() -> None:
     """Alinhar o contador não pode empurrar a conta armada."""
-    problem = Problem("tables", "7x7", BinaryOp("17", "×", "86"), "1462")
+    problem = Problem("tables", "tables:7x7", BinaryOp("17", "×", "86"), "1462")
 
     prompt = _format_prompt(
         render(problem.expression, Layout.VERTICAL), 3, 30, 207.42, hud_width=40, styled=False
@@ -312,7 +312,7 @@ def test_prompt_keeps_the_operands_flush_left_while_the_hud_goes_right() -> None
 
 
 def test_unary_prompt_also_gets_the_hud_on_its_own_line() -> None:
-    problem = Problem("squares", "13", Term("13²"), "169")
+    problem = Problem("squares", "squares:13", Term("13²"), "169")
 
     prompt = _format_prompt(
         render(problem.expression, Layout.VERTICAL), 3, 30, 207.42, hud_width=40, styled=False
@@ -324,7 +324,7 @@ def test_unary_prompt_also_gets_the_hud_on_its_own_line() -> None:
 
 def test_ansi_never_lands_on_the_line_the_user_types_in() -> None:
     """Escape na última linha descontaria colunas do readline na edição."""
-    problem = Problem("tables", "7x7", BinaryOp("17", "×", "86"), "1462")
+    problem = Problem("tables", "tables:7x7", BinaryOp("17", "×", "86"), "1462")
 
     for layout in Layout:
         for running in (True, False):

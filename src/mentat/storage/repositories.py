@@ -13,10 +13,19 @@ Dois repositórios hoje:
 """
 
 import sqlite3
+from collections.abc import Iterable
 from datetime import UTC, datetime
 
 from mentat.core.problem import Attempt
 from mentat.core.scheduler import Card
+
+_IN_CHUNK = 500
+"""Chaves por consulta ``IN`` em :meth:`ScheduleRepo.load_for`.
+
+Abaixo do limite histórico de 999 variáveis do SQLite
+(``SQLITE_MAX_VARIABLE_NUMBER`` pré-3.32) — universos grandes (tabuada
+até 99 tem ~5k chaves) são divididos em lotes em vez de estourar a query.
+"""
 
 
 class AttemptRepo:
@@ -81,15 +90,55 @@ class ScheduleRepo:
 
     Cada linha é um upsert: a chave primária é ``(module_id, problem_key)``
     e o ``Card`` atual sobrescreve o anterior. Ao abrir uma sessão, o
-    chamador chama :meth:`load` para recuperar todos os ``Card`` do módulo
-    e passa o dicionário ao scheduler na memória.
+    chamador chama :meth:`load_for` com o universo do gerador para
+    recuperar os ``Card`` correspondentes e passa o dicionário ao
+    scheduler na memória.
     """
 
     def __init__(self, conn: sqlite3.Connection) -> None:
         self._conn = conn
 
+    def load_for(self, keys: Iterable[str]) -> dict[str, Card]:
+        """Carrega os ``Card`` persistidos para exatamente as chaves dadas.
+
+        É a pergunta que uma sessão realmente faz: "o estado SM-2 do
+        universo *deste gerador*" — sem assumir que o universo cabe em um
+        único ``module_id`` (um gerador composto atravessa vários). A
+        consulta filtra por ``problem_key`` apenas: as chaves são
+        globalmente únicas (invariante de
+        :class:`~mentat.core.problem.Problem`), então o ``module_id`` não é
+        necessário para desambiguar — ele permanece na tabela como
+        partição explícita para proveniência e análise.
+
+        Chaves sem linha persistida simplesmente não aparecem no resultado
+        (o scheduler as trata como inéditas, peso máximo).
+        """
+        cards: dict[str, Card] = {}
+        key_list = list(keys)
+        for start in range(0, len(key_list), _IN_CHUNK):
+            chunk = key_list[start : start + _IN_CHUNK]
+            placeholders = ", ".join("?" * len(chunk))
+            rows = self._conn.execute(
+                f"""
+                SELECT problem_key, ease_factor, consecutive_correct
+                FROM schedule
+                WHERE problem_key IN ({placeholders})
+                """,  # f-string só injeta os "?"; os valores vão parametrizados
+                chunk,
+            ).fetchall()
+            for row in rows:
+                cards[row["problem_key"]] = Card(
+                    ease_factor=float(row["ease_factor"]),
+                    consecutive_correct=int(row["consecutive_correct"]),
+                )
+        return cards
+
     def load(self, module_id: str) -> dict[str, Card]:
-        """Carrega todos os ``Card`` persistidos para o módulo dado."""
+        """Carrega todos os ``Card`` persistidos para o módulo dado.
+
+        Visão por partição, útil para inspeção e ferramentas de análise;
+        o caminho da sessão usa :meth:`load_for`, que não pressupõe módulo.
+        """
         rows = self._conn.execute(
             """
             SELECT problem_key, ease_factor, consecutive_correct

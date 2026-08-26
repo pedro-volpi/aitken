@@ -23,9 +23,11 @@ class Problem:
 
     Attributes:
         module_id: identificador do módulo gerador (ex.: ``"tables"``).
-        key: chave canônica estável para agregação estatística. Dois
-            problemas que devem compartilhar histórico (ex.: ``7 × 8`` e
-            ``8 × 7`` sob ``commutative_pairs=True``) têm a mesma ``key``.
+        key: chave canônica estável para agregação estatística, **única no
+            projeto inteiro** por começar com ``"<module_id>:"`` (invariante
+            de ``__post_init__``). Dois problemas que devem compartilhar
+            histórico (ex.: ``7 × 8`` e ``8 × 7`` sob
+            ``commutative_pairs=True``) têm a mesma ``key``.
         expression: descrição *estrutural* do que é o problema (ver
             :mod:`mentat.core.expression`). O gerador declara a estrutura;
             a UI decide o arranjo (horizontal, armado, ...).
@@ -38,6 +40,23 @@ class Problem:
     key: str
     expression: Expression
     expected_answer: str
+
+    def __post_init__(self) -> None:
+        """Impõe a unicidade global das chaves: ``key`` embute o módulo.
+
+        Toda ``key`` começa com ``"<module_id>:"`` — convenção que os
+        geradores sempre seguiram e que aqui vira invariante verificada.
+        Ela é estrutural, não cosmética: os mapas que cruzam a fronteira da
+        sessão (``weights``, ``exclude``, o dicionário de ``Card``) são
+        indexados por ``key`` pura, e é o prefixo que impede ``squares:13``
+        e ``cubes:13`` de colidirem quando um gerador *composto* mistura
+        módulos na mesma sessão.
+        """
+        if not self.key.startswith(f"{self.module_id}:"):
+            raise ValueError(
+                f"key {self.key!r} deve começar com '{self.module_id}:' — "
+                "a unicidade global das chaves é o que permite compor geradores"
+            )
 
     @property
     def prompt(self) -> str:

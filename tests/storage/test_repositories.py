@@ -143,3 +143,42 @@ def test_schedule_isolates_modules(schedule: ScheduleRepo) -> None:
     assert "tables:7x8" in schedule.load("tables")
     assert "tables:7x8" not in schedule.load("squares")
     assert "squares:12" in schedule.load("squares")
+
+
+def test_load_for_empty_universe_and_empty_table(schedule: ScheduleRepo) -> None:
+    assert schedule.load_for([]) == {}
+    assert schedule.load_for(["tables:7x8"]) == {}
+
+
+def test_load_for_returns_only_the_requested_keys(schedule: ScheduleRepo) -> None:
+    schedule.upsert("tables", "tables:7x8", Card(ease_factor=2.3, consecutive_correct=2))
+    schedule.upsert("tables", "tables:6x9", Card(ease_factor=1.9))
+    schedule.upsert("squares", "squares:12", Card(ease_factor=1.7))
+
+    loaded = schedule.load_for(["tables:7x8", "squares:12", "cubes:4"])
+
+    assert set(loaded) == {"tables:7x8", "squares:12"}  # cubes:4 é inédita
+    assert loaded["tables:7x8"].consecutive_correct == 2
+    assert loaded["squares:12"].ease_factor == pytest.approx(1.7)
+
+
+def test_load_for_spans_modules_in_one_call(schedule: ScheduleRepo) -> None:
+    """O caso do gerador composto: um universo atravessando partições."""
+    schedule.upsert("tables", "tables:7x8", Card(ease_factor=2.0))
+    schedule.upsert("cubes", "cubes:4", Card(ease_factor=1.5))
+
+    loaded = schedule.load_for(["tables:7x8", "cubes:4"])
+
+    assert set(loaded) == {"tables:7x8", "cubes:4"}
+
+
+def test_load_for_chunks_universes_beyond_the_sql_variable_limit(schedule: ScheduleRepo) -> None:
+    """Mais chaves que ``_IN_CHUNK`` — a consulta é dividida em lotes."""
+    keys = [f"tables:{i}x{i}" for i in range(1, 1202)]
+    for key in keys[::100]:
+        schedule.upsert("tables", key, Card(ease_factor=1.4))
+
+    loaded = schedule.load_for(keys)
+
+    assert set(loaded) == set(keys[::100])
+    assert all(card.ease_factor == pytest.approx(1.4) for card in loaded.values())

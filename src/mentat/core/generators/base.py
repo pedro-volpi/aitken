@@ -18,6 +18,21 @@ Separação de responsabilidades:
   Manter a interpretação dentro do gerador é deliberado: frações aceitam
   ``"a/b"``, decimais aceitam ``","`` ou ``"."``, etc. Cada módulo conhece
   suas próprias regras.
+
+**O contrato é fechado sob composição.** Um gerador não precisa ser um
+módulo único: um drill misto futuro é um gerador *composto* que embrulha
+outros geradores e satisfaz este mesmo ``Protocol`` — ``all_keys()`` é a
+união dos universos dos filhos, ``next()`` delega a um filho, ``check()``
+despacha pelo ``module_id`` do :class:`Problem` recebido. Duas
+propriedades sustentam isso:
+
+1. **Chaves globalmente únicas**: toda ``key`` começa com
+   ``"<module_id>:"`` (invariante verificada em
+   :class:`~mentat.core.problem.Problem`), então ``weights``, ``exclude``
+   e o estado SM-2 da sessão nunca colidem entre módulos.
+2. **Nenhum membro identifica "o" módulo**: o contrato não exige
+   ``module_id`` — a proveniência mora em cada ``Problem`` produzido, que
+   sempre sabe de qual módulo veio, mesmo num gerador composto.
 """
 
 from collections.abc import Mapping, Sequence
@@ -30,10 +45,16 @@ from mentat.core.problem import Problem
 
 @runtime_checkable
 class Generator(Protocol):
-    """Contrato que todo gerador de drill deve satisfazer."""
+    """Contrato que todo gerador de drill deve satisfazer.
 
-    module_id: str
-    """Identificador estável do módulo (ex.: ``"tables"``)."""
+    Deliberadamente sem ``module_id``: o identificador de módulo é detalhe
+    dos geradores-folha (que o usam para construir seus ``Problem``), não
+    exigência do contrato. Quem consome um gerador — a sessão — nunca
+    precisa saber de *qual* módulo ele é, apenas do universo
+    (:meth:`all_keys`), do sorteio (:meth:`next`) e da validação
+    (:meth:`check`). É isso que deixa um gerador composto multi-módulo
+    satisfazer o mesmo contrato sem inventar um módulo fictício.
+    """
 
     def next(
         self,
